@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin API Tester</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; margin-bottom: 20px; }
+        .section { margin-bottom: 30px; padding: 20px; background: #f9f9f9; border-radius: 5px; }
+        .section h2 { color: #555; margin-bottom: 15px; font-size: 18px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        input, textarea { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
+        .response { background: #f0f0f0; padding: 15px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .token-display { background: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0; word-break: break-all; font-size: 11px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎫 Festival Ticket System - Admin API Tester</h1>
+        
+        <!-- Login Section -->
+        <div class="section">
+            <h2>1. Login</h2>
+            <input type="text" id="username" placeholder="Username" value="admin">
+            <input type="password" id="password" placeholder="Password" value="admin123">
+            <button onclick="login()">Login</button>
+            <div id="token-display" class="token-display" style="display:none;">
+                <strong>Access Token:</strong> <span id="token-text"></span>
+            </div>
+            <div id="login-response" class="response" style="display:none;"></div>
+        </div>
+
+        <div class="grid">
+            <!-- Create Event -->
+            <div class="section">
+                <h2>2. Create Event</h2>
+                <input type="text" id="event-name" placeholder="Event Name" value="Summer Festival">
+                <input type="text" id="event-place" placeholder="Place" value="Central Park">
+                <input type="text" id="event-address" placeholder="Address" value="123 Park Ave">
+                <input type="date" id="event-start" value="2024-06-01">
+                <input type="date" id="event-end" value="2024-06-03">
+                <button onclick="createEventAPI()">Create Event</button>
+                <div id="event-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- Create Sub-Event -->
+            <div class="section">
+                <h2>3. Create Sub-Event</h2>
+                <input type="number" id="subevent-event-id" placeholder="Event ID" value="1">
+                <input type="text" id="subevent-name" placeholder="Sub-Event Name" value="DJ Night">
+                <input type="text" id="subevent-desc" placeholder="Description" value="Electronic music night">
+                <input type="datetime-local" id="subevent-start" value="2024-06-01T18:00">
+                <input type="datetime-local" id="subevent-end" value="2024-06-01T23:00">
+                <button onclick="createSubEvent()">Create Sub-Event</button>
+                <div id="subevent-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- List Sub-Events -->
+            <div class="section">
+                <h2>4. List Sub-Events</h2>
+                <input type="number" id="list-subevent-event-id" placeholder="Event ID (optional)" value="">
+                <button onclick="listSubEvents()">Get Sub-Events</button>
+                <div id="subevents-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- List Events -->
+            <div class="section">
+                <h2>5. List Events</h2>
+                <button onclick="listEvents()">Get Events</button>
+                <div id="events-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- Create Entry Type -->
+            <div class="section">
+                <h2>6. Create Entry Type</h2>
+                <input type="number" id="entry-subevent-id" placeholder="Sub-Event ID" value="1" required>
+                <input type="text" id="entry-name" placeholder="Entry Type Name" value="Adult" required>
+                <input type="number" id="entry-price" placeholder="Price" value="50.00" step="0.01" required>
+                <input type="text" id="entry-desc" placeholder="Description" value="Adult entry ticket">
+                <button onclick="createEntryType()">Create Entry Type</button>
+                <div id="entry-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- Create Staff -->
+            <div class="section">
+                <h2>7. Create Staff</h2>
+                <input type="text" id="staff-username" placeholder="Username" value="staff1">
+                <input type="password" id="staff-password" placeholder="Password" value="staff123">
+                <input type="email" id="staff-email" placeholder="Email" value="staff1@test.com">
+                <input type="text" id="staff-firstname" placeholder="First Name" value="John">
+                <input type="text" id="staff-lastname" placeholder="Last Name" value="Doe">
+                <input type="number" id="staff-range-start" placeholder="Range Start" value="5001">
+                <input type="number" id="staff-range-end" placeholder="Range End" value="6000">
+                <button onclick="createStaff()">Create Staff</button>
+                <div id="staff-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- List Staff -->
+            <div class="section">
+                <h2>8. List Staff</h2>
+                <button onclick="listStaff()">Get Staff List</button>
+                <div id="staff-list-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- Assign Sub-Events to Staff -->
+            <div class="section">
+                <h2>8b. Assign Sub-Events to Staff</h2>
+                <input type="number" id="assign-staff-id" placeholder="Staff ID" value="">
+                <input type="text" id="assign-subevent-ids" placeholder="Sub-Event IDs (comma separated)" value="1,2">
+                <button onclick="assignSubEvents()">Assign Sub-Events</button>
+                <div id="assign-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- Configure Ticket -->
+            <div class="section">
+                <h2>9. Configure Ticket</h2>
+                <input type="number" id="config-event-id" placeholder="Event ID" value="1">
+                <input type="text" id="config-header" placeholder="Header Text" value="Welcome to Summer Festival">
+                <input type="text" id="config-footer" placeholder="Footer Text" value="Thank you!">
+                <button onclick="configureTicket()">Configure Ticket</button>
+                <div id="config-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- Tickets Report -->
+            <div class="section">
+                <h2>10. Tickets Report</h2>
+                <input type="number" id="report-event-id" placeholder="Event ID (optional)" value="1">
+                <button onclick="ticketsReport()">Get Tickets Report</button>
+                <div id="tickets-report-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- Revenue Report -->
+            <div class="section">
+                <h2>11. Revenue Report</h2>
+                <input type="number" id="revenue-event-id" placeholder="Event ID (optional)" value="1">
+                <button onclick="revenueReport()">Get Revenue Report</button>
+                <div id="revenue-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- Staff Summary -->
+            <div class="section">
+                <h2>12. Staff Summary Report</h2>
+                <input type="number" id="summary-staff-id" placeholder="Staff ID (optional)">
+                <button onclick="staffSummary()">Get Staff Summary</button>
+                <div id="summary-response" class="response" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api';
+        let accessToken = '';
+
+        function showResponse(elementId, data, isError = false) {
+            const el = document.getElementById(elementId);
+            el.style.display = 'block';
+            el.className = isError ? 'response error' : 'response success';
+            el.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/login/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    accessToken = data.access;
+                    document.getElementById('token-display').style.display = 'block';
+                    document.getElementById('token-text').textContent = accessToken.substring(0, 50) + '...';
+                    showResponse('login-response', data);
+                } else {
+                    showResponse('login-response', data, true);
+                }
+            } catch (error) {
+                showResponse('login-response', { error: error.message }, true);
+            }
+        }
+
+        async function apiCall(endpoint, method = 'GET', body = null, responseId) {
+            if (!accessToken) {
+                showResponse(responseId, { error: 'Please login first!' }, true);
+                return;
+            }
+
+            try {
+                const options = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                };
+
+                if (body) options.body = JSON.stringify(body);
+
+                const response = await fetch(`${API_BASE}${endpoint}`, options);
+                const data = await response.json();
+                
+                showResponse(responseId, data, !response.ok);
+            } catch (error) {
+                showResponse(responseId, { error: error.message }, true);
+            }
+        }
+
+        async function createSubEvent() {
+            const body = {
+                event: parseInt(document.getElementById('subevent-event-id').value),
+                name: document.getElementById('subevent-name').value,
+                description: document.getElementById('subevent-desc').value,
+                start_time: document.getElementById('subevent-start').value,
+                end_time: document.getElementById('subevent-end').value,
+                is_active: true
+            };
+            await apiCall('/admin/create-sub-event/', 'POST', body, 'subevent-response');
+        }
+
+        async function listSubEvents() {
+            const eventId = document.getElementById('list-subevent-event-id').value;
+            const endpoint = eventId ? `/admin/sub-events/${eventId}/` : '/admin/sub-events/0/';
+            await apiCall(endpoint, 'GET', null, 'subevents-response');
+        }
+
+        async function createEventAPI() {
+            const body = {
+                name: document.getElementById('event-name').value,
+                place: document.getElementById('event-place').value,
+                address: document.getElementById('event-address').value,
+                start_date: document.getElementById('event-start').value,
+                end_date: document.getElementById('event-end').value
+            };
+            await apiCall('/admin/create-event/', 'POST', body, 'event-response');
+        }
+
+        async function listEvents() {
+            await apiCall('/admin/event-list/', 'GET', null, 'events-response');
+        }
+
+        async function createEntryType() {
+            const body = {
+                sub_event: parseInt(document.getElementById('entry-subevent-id').value),
+                name: document.getElementById('entry-name').value,
+                price: document.getElementById('entry-price').value,
+                description: document.getElementById('entry-desc').value,
+                is_active: true
+            };
+            await apiCall('/admin/create-entry-type/', 'POST', body, 'entry-response');
+        }
+
+        async function createStaff() {
+            const body = {
+                username: document.getElementById('staff-username').value,
+                password: document.getElementById('staff-password').value,
+                email: document.getElementById('staff-email').value,
+                first_name: document.getElementById('staff-firstname').value,
+                last_name: document.getElementById('staff-lastname').value,
+                role: 'staff',
+                range_start: parseInt(document.getElementById('staff-range-start').value),
+                range_end: parseInt(document.getElementById('staff-range-end').value)
+            };
+            await apiCall('/admin/create-staff/', 'POST', body, 'staff-response');
+        }
+
+        async function listStaff() {
+            await apiCall('/admin/staff-list/', 'GET', null, 'staff-list-response');
+        }
+
+        async function assignSubEvents() {
+            const staffId = parseInt(document.getElementById('assign-staff-id').value);
+            const subEventIds = document.getElementById('assign-subevent-ids').value
+                .split(',')
+                .map(id => parseInt(id.trim()))
+                .filter(id => !isNaN(id));
+            
+            const body = {
+                staff_id: staffId,
+                sub_event_ids: subEventIds
+            };
+            await apiCall('/admin/assign-events/', 'POST', body, 'assign-response');
+        }
+
+        async function configureTicket() {
+            const body = {
+                event: parseInt(document.getElementById('config-event-id').value),
+                header_text: document.getElementById('config-header').value,
+                footer_text: document.getElementById('config-footer').value,
+                show_event_name: true,
+                show_place: true,
+                show_entry_type: true,
+                show_price: true
+            };
+            await apiCall('/admin/configure-ticket/', 'POST', body, 'config-response');
+        }
+
+        async function ticketsReport() {
+            const eventId = document.getElementById('report-event-id').value;
+            const endpoint = eventId ? `/admin/reports/tickets/?event_id=${eventId}` : '/admin/reports/tickets/';
+            await apiCall(endpoint, 'GET', null, 'tickets-report-response');
+        }
+
+        async function revenueReport() {
+            const eventId = document.getElementById('revenue-event-id').value;
+            const endpoint = eventId ? `/admin/reports/revenue/?event_id=${eventId}` : '/admin/reports/revenue/';
+            await apiCall(endpoint, 'GET', null, 'revenue-response');
+        }
+
+        async function staffSummary() {
+            const staffId = document.getElementById('summary-staff-id').value;
+            const endpoint = staffId ? `/admin/reports/staff-summary/?staff_id=${staffId}` : '/admin/reports/staff-summary/';
+            await apiCall(endpoint, 'GET', null, 'summary-response');
+        }
+    </script>
+</body>
+</html>

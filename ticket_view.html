@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticket Generated</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .ticket {
+            background: white;
+            border: 2px solid #1e293b;
+            margin-bottom: 20px;
+        }
+
+        .ticket-header {
+            text-align: center;
+            padding: 20px;
+            border-bottom: 2px dashed #1e293b;
+        }
+
+        .ticket-header h1 {
+            font-size: 18px;
+            color: #1e293b;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .ticket-date {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .ticket-body {
+            padding: 20px;
+        }
+
+        .ticket-id {
+            text-align: center;
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+            padding: 16px;
+            background: #f8fafc;
+            border: 2px solid #1e293b;
+            margin-bottom: 16px;
+            letter-spacing: 2px;
+        }
+
+        .ticket-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .ticket-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dotted #cbd5e1;
+            font-size: 14px;
+        }
+
+        .ticket-row:last-child {
+            border-bottom: none;
+        }
+
+        .ticket-label {
+            color: #64748b;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+
+        .ticket-value {
+            color: #1e293b;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .ticket-footer {
+            text-align: center;
+            padding: 20px;
+            border-top: 2px dashed #1e293b;
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+        }
+
+        .btn-print {
+            background: #1e293b;
+            color: white;
+        }
+
+        .btn-print:hover {
+            background: #334155;
+        }
+
+        .btn-back {
+            background: white;
+            color: #1e293b;
+            border: 2px solid #1e293b;
+        }
+
+        .btn-back:hover {
+            background: #f8fafc;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .actions {
+                display: none;
+            }
+            .container {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="ticket" id="ticket">
+            <div class="ticket-header" id="ticketHeader">
+                <h1>FESTIVAL TICKET</h1>
+                <div class="ticket-date" id="ticketDate"></div>
+            </div>
+            <div class="ticket-body">
+                <div class="ticket-id" id="ticketId"></div>
+                <div class="ticket-info" id="ticketInfo"></div>
+            </div>
+            <div class="ticket-footer" id="ticketFooter">
+                <div>THANK YOU FOR YOUR VISIT</div>
+                <div style="margin-top: 8px;">KEEP THIS TICKET SAFE</div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-print" onclick="window.print()">Print</button>
+            <button class="btn btn-back" onclick="goBack()">New Ticket</button>
+        </div>
+    </div>
+
+    <script>
+        const ticketData = JSON.parse(localStorage.getItem('generated_ticket') || '{}');
+
+        if (!ticketData.ticket_id) {
+            window.location.href = 'staff_dashboard.html';
+        }
+
+        // Display header text
+        if (ticketData.header_text) {
+            document.getElementById('ticketHeader').innerHTML = `
+                <h1>${ticketData.header_text}</h1>
+                <div class="ticket-date" id="ticketDate"></div>
+            `;
+        }
+
+        // Display footer text
+        if (ticketData.footer_text) {
+            document.getElementById('ticketFooter').innerHTML = `
+                <div>${ticketData.footer_text}</div>
+            `;
+        }
+
+        // Display ticket
+        const date = new Date(ticketData.created_at).toLocaleString();
+        document.getElementById('ticketDate').textContent = date;
+        document.getElementById('ticketId').textContent = ticketData.ticket_id;
+
+        const ticketInfo = document.getElementById('ticketInfo');
+        let infoHTML = '';
+
+        if (ticketData.event_name) {
+            infoHTML += `
+                <div class="ticket-row">
+                    <span class="ticket-label">Event</span>
+                    <span class="ticket-value">${ticketData.event_name}</span>
+                </div>
+            `;
+        }
+
+        infoHTML += `
+            <div class="ticket-row">
+                <span class="ticket-label">Sub Event</span>
+                <span class="ticket-value">${ticketData.sub_event_name}</span>
+            </div>
+        `;
+
+        if (ticketData.place) {
+            infoHTML += `
+                <div class="ticket-row">
+                    <span class="ticket-label">Venue</span>
+                    <span class="ticket-value">${ticketData.place}</span>
+                </div>
+            `;
+        }
+
+        if (ticketData.entry_type) {
+            infoHTML += `
+                <div class="ticket-row">
+                    <span class="ticket-label">Type</span>
+                    <span class="ticket-value">${ticketData.entry_type}</span>
+                </div>
+            `;
+        }
+
+        if (ticketData.price && parseFloat(ticketData.price) > 0) {
+            infoHTML += `
+                <div class="ticket-row">
+                    <span class="ticket-label">Price</span>
+                    <span class="ticket-value">₹${ticketData.price}</span>
+                </div>
+            `;
+        }
+
+        infoHTML += `
+            <div class="ticket-row">
+                <span class="ticket-label">S.No</span>
+                <span class="ticket-value">#${ticketData.sequence_number}</span>
+            </div>
+        `;
+
+        ticketInfo.innerHTML = infoHTML;
+
+        function goBack() {
+            localStorage.removeItem('generated_ticket');
+            window.location.href = 'staff_dashboard.html';
+        }
+    </script>
+</body>
+</html>

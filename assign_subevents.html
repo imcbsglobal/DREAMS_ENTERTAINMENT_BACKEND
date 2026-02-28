@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assign Sub-Events to Staff</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
+        .header h1 { font-size: 28px; margin-bottom: 5px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        .content { padding: 30px; }
+        .login-section { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-weight: 600; margin-bottom: 8px; color: #333; font-size: 14px; }
+        input, select { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; transition: border 0.3s; }
+        input:focus, select:focus { outline: none; border-color: #667eea; }
+        button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: transform 0.2s; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
+        button:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+        .btn-secondary { background: #6c757d; margin-left: 10px; }
+        .btn-secondary:hover { box-shadow: 0 5px 15px rgba(108, 117, 125, 0.4); }
+        .token-display { background: #d1ecf1; color: #0c5460; padding: 12px; border-radius: 6px; margin-top: 10px; font-size: 12px; word-break: break-all; }
+        .assignment-section { display: none; }
+        .assignment-section.active { display: block; }
+        .staff-card { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #667eea; }
+        .staff-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .staff-name { font-size: 18px; font-weight: 600; color: #333; }
+        .staff-details { font-size: 13px; color: #666; }
+        .subevent-list { max-height: 300px; overflow-y: auto; border: 2px solid #e0e0e0; border-radius: 6px; padding: 10px; }
+        .subevent-item { padding: 12px; margin-bottom: 8px; background: white; border-radius: 6px; border: 2px solid #e0e0e0; cursor: pointer; transition: all 0.2s; }
+        .subevent-item:hover { border-color: #667eea; background: #f0f4ff; }
+        .subevent-item.selected { border-color: #667eea; background: #e8eeff; }
+        .subevent-item input[type="checkbox"] { margin-right: 10px; }
+        .subevent-name { font-weight: 600; color: #333; }
+        .subevent-details { font-size: 12px; color: #666; margin-top: 4px; }
+        .alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-size: 14px; }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .loading { text-align: center; padding: 20px; color: #667eea; }
+        .current-assignments { background: #fff3cd; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+        .current-assignments h4 { margin-bottom: 10px; color: #856404; font-size: 14px; }
+        .current-assignments ul { list-style: none; padding-left: 0; }
+        .current-assignments li { padding: 5px 0; font-size: 13px; color: #856404; }
+        .action-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-value { font-size: 24px; font-weight: 700; }
+        .stat-label { font-size: 12px; opacity: 0.9; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎫 Assign Sub-Events to Staff</h1>
+            <p>Manage staff access to festival sub-events</p>
+        </div>
+
+        <div class="content">
+            <!-- Login Section -->
+            <div class="login-section">
+                <h3 style="margin-bottom: 15px; color: #333;">Admin Login</h3>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="username" placeholder="Enter admin username" value="admin">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" placeholder="Enter password" value="admin123">
+                </div>
+                <button onclick="login()">Login</button>
+                <div id="token-display" class="token-display" style="display:none;">
+                    <strong>✓ Logged in as:</strong> <span id="user-info"></span>
+                </div>
+            </div>
+
+            <!-- Assignment Section -->
+            <div id="assignment-section" class="assignment-section">
+                <div id="alert-container"></div>
+
+                <!-- Stats -->
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="total-staff">0</div>
+                        <div class="stat-label">Total Staff</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="total-subevents">0</div>
+                        <div class="stat-label">Total Sub-Events</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="assigned-count">0</div>
+                        <div class="stat-label">Assignments Made</div>
+                    </div>
+                </div>
+
+                <!-- Staff Selection -->
+                <div class="form-group">
+                    <label>Select Staff Member</label>
+                    <select id="staff-select" onchange="loadStaffAssignments()">
+                        <option value="">-- Select Staff --</option>
+                    </select>
+                </div>
+
+                <!-- Staff Details & Assignment -->
+                <div id="staff-details" style="display:none;">
+                    <div class="staff-card">
+                        <div class="staff-info">
+                            <div>
+                                <div class="staff-name" id="staff-name"></div>
+                                <div class="staff-details" id="staff-meta"></div>
+                            </div>
+                        </div>
+
+                        <!-- Current Assignments -->
+                        <div id="current-assignments" class="current-assignments" style="display:none;">
+                            <h4>📌 Currently Assigned Sub-Events:</h4>
+                            <ul id="current-list"></ul>
+                        </div>
+
+                        <!-- Sub-Events List -->
+                        <div class="form-group">
+                            <label>Available Sub-Events (Select multiple)</label>
+                            <div class="subevent-list" id="subevent-list">
+                                <div class="loading">Loading sub-events...</div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="action-buttons">
+                            <button onclick="assignSubEvents()">💾 Save Assignments</button>
+                            <button class="btn-secondary" onclick="clearSelection()">🔄 Clear Selection</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000/api';
+        let accessToken = '';
+        let staffList = [];
+        let subEventsList = [];
+        let selectedStaffId = null;
+        let selectedSubEvents = new Set();
+
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alert-container');
+            container.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => container.innerHTML = '', 5000);
+        }
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/login/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    accessToken = data.access;
+                    document.getElementById('token-display').style.display = 'block';
+                    document.getElementById('user-info').textContent = `${data.user.username} (${data.user.role})`;
+                    document.getElementById('assignment-section').classList.add('active');
+                    
+                    await loadData();
+                    showAlert('✓ Login successful! Loading data...', 'success');
+                } else {
+                    showAlert('Login failed: ' + (data.detail || 'Invalid credentials'), 'error');
+                }
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'error');
+            }
+        }
+
+        async function loadData() {
+            await Promise.all([loadStaff(), loadSubEvents()]);
+        }
+
+        async function loadStaff() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/staff-list/`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                staffList = await response.json();
+                
+                const staffSelect = document.getElementById('staff-select');
+                staffSelect.innerHTML = '<option value="">-- Select Staff --</option>';
+                
+                staffList.forEach(staff => {
+                    if (staff.role === 'staff') {
+                        staffSelect.innerHTML += `<option value="${staff.id}">${staff.user.username} (${staff.staff_code}) - Range: ${staff.range_start}-${staff.range_end}</option>`;
+                    }
+                });
+
+                document.getElementById('total-staff').textContent = staffList.filter(s => s.role === 'staff').length;
+            } catch (error) {
+                showAlert('Error loading staff: ' + error.message, 'error');
+            }
+        }
+
+        async function loadSubEvents() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/sub-events/0/`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                subEventsList = await response.json();
+                document.getElementById('total-subevents').textContent = subEventsList.length;
+            } catch (error) {
+                showAlert('Error loading sub-events: ' + error.message, 'error');
+            }
+        }
+
+        function loadStaffAssignments() {
+            const staffId = document.getElementById('staff-select').value;
+            if (!staffId) {
+                document.getElementById('staff-details').style.display = 'none';
+                return;
+            }
+
+            selectedStaffId = parseInt(staffId);
+            const staff = staffList.find(s => s.id === selectedStaffId);
+
+            if (!staff) return;
+
+            // Display staff info
+            document.getElementById('staff-name').textContent = `${staff.user.first_name} ${staff.user.last_name} (@${staff.user.username})`;
+            document.getElementById('staff-meta').textContent = `Staff Code: ${staff.staff_code} | Range: ${staff.range_start}-${staff.range_end} | Counter: ${staff.current_counter}`;
+
+            // Show current assignments
+            if (staff.assigned_sub_events && staff.assigned_sub_events.length > 0) {
+                const currentList = document.getElementById('current-list');
+                currentList.innerHTML = '';
+                staff.assigned_sub_events.forEach(seId => {
+                    const se = subEventsList.find(s => s.id === seId);
+                    if (se) {
+                        currentList.innerHTML += `<li>✓ ${se.event_name} - ${se.name}</li>`;
+                    }
+                });
+                document.getElementById('current-assignments').style.display = 'block';
+                selectedSubEvents = new Set(staff.assigned_sub_events);
+            } else {
+                document.getElementById('current-assignments').style.display = 'none';
+                selectedSubEvents = new Set();
+            }
+
+            // Display sub-events
+            renderSubEvents();
+            document.getElementById('staff-details').style.display = 'block';
+        }
+
+        function renderSubEvents() {
+            const container = document.getElementById('subevent-list');
+            container.innerHTML = '';
+
+            if (subEventsList.length === 0) {
+                container.innerHTML = '<div class="loading">No sub-events available</div>';
+                return;
+            }
+
+            subEventsList.forEach(se => {
+                const isSelected = selectedSubEvents.has(se.id);
+                const div = document.createElement('div');
+                div.className = `subevent-item ${isSelected ? 'selected' : ''}`;
+                div.onclick = () => toggleSubEvent(se.id);
+                div.innerHTML = `
+                    <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleSubEvent(${se.id})">
+                    <span class="subevent-name">${se.event_name} - ${se.name}</span>
+                    <div class="subevent-details">Code: ${se.code} | ${new Date(se.start_time).toLocaleDateString()} - ${new Date(se.end_time).toLocaleDateString()}</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function toggleSubEvent(subEventId) {
+            if (selectedSubEvents.has(subEventId)) {
+                selectedSubEvents.delete(subEventId);
+            } else {
+                selectedSubEvents.add(subEventId);
+            }
+            renderSubEvents();
+        }
+
+        function clearSelection() {
+            selectedSubEvents.clear();
+            renderSubEvents();
+        }
+
+        async function assignSubEvents() {
+            if (!selectedStaffId) {
+                showAlert('Please select a staff member', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/assign-events/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({
+                        staff_id: selectedStaffId,
+                        sub_event_ids: Array.from(selectedSubEvents),
+                        replace: true
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showAlert(`✓ Successfully assigned ${selectedSubEvents.size} sub-events to staff!`, 'success');
+                    document.getElementById('assigned-count').textContent = parseInt(document.getElementById('assigned-count').textContent) + 1;
+                    await loadStaff();
+                    loadStaffAssignments();
+                } else {
+                    showAlert('Error: ' + (data.error || 'Assignment failed'), 'error');
+                }
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
