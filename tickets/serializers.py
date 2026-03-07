@@ -95,15 +95,18 @@ class TicketSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Ticket
-        fields = ['id', 'ticket_id', 'event', 'event_name', 'sub_event', 'sub_event_name', 
+        fields = ['id', 'ticket_id', 'group_id', 'quantity_in_group', 'event', 'event_name', 'sub_event', 'sub_event_name', 
                   'entry_type', 'entry_type_name', 'staff', 'staff_username', 'sequence_number', 'price', 'created_at']
-        read_only_fields = ['ticket_id', 'sequence_number', 'created_at']
+        read_only_fields = ['ticket_id', 'group_id', 'quantity_in_group', 'sequence_number', 'created_at']
 
 
 class GenerateTicketSerializer(serializers.Serializer):
     event_id = serializers.IntegerField()
     sub_event_id = serializers.IntegerField()
-    entry_type_id = serializers.IntegerField()
+    tickets = serializers.ListField(
+        child=serializers.DictField(),
+        allow_empty=False
+    )
 
     def validate(self, data):
         try:
@@ -119,23 +122,42 @@ class GenerateTicketSerializer(serializers.Serializer):
         if not sub_event.is_active:
             raise serializers.ValidationError("Sub-event is not active")
 
-        try:
-            entry_type = EntryType.objects.get(id=data['entry_type_id'], sub_event=sub_event)
-        except EntryType.DoesNotExist:
-            raise serializers.ValidationError("Entry type not found for this sub-event")
-
-        if not entry_type.is_active:
-            raise serializers.ValidationError("Entry type is not active")
+        # Validate each ticket in the list
+        validated_tickets = []
+        for ticket_item in data['tickets']:
+            if 'entry_type_id' not in ticket_item or 'quantity' not in ticket_item:
+                raise serializers.ValidationError("Each ticket must have 'entry_type_id' and 'quantity'")
+            
+            entry_type_id = ticket_item['entry_type_id']
+            quantity = ticket_item['quantity']
+            
+            if quantity < 1:
+                raise serializers.ValidationError("Quantity must be at least 1")
+            
+            try:
+                entry_type = EntryType.objects.get(id=entry_type_id, sub_event=sub_event)
+            except EntryType.DoesNotExist:
+                raise serializers.ValidationError(f"Entry type {entry_type_id} not found for this sub-event")
+            
+            if not entry_type.is_active:
+                raise serializers.ValidationError(f"Entry type {entry_type.name} is not active")
+            
+            validated_tickets.append({
+                'entry_type': entry_type,
+                'quantity': quantity
+            })
 
         data['event'] = event
         data['sub_event'] = sub_event
-        data['entry_type'] = entry_type
+        data['validated_tickets'] = validated_tickets
         return data
 
 
 class TicketPrintSerializer(serializers.Serializer):
     """Serializer for ticket print response"""
     ticket_id = serializers.CharField()
+    group_id = serializers.CharField()
+    quantity_in_group = serializers.IntegerField()
     event_name = serializers.CharField()
     sub_event_name = serializers.CharField()
     place = serializers.CharField()

@@ -169,16 +169,26 @@
             </div>
 
             <div class="grid">
+                <!-- View Events -->
+                <div class="section">
+                    <h2>11. View Assigned Events (Staff)</h2>
+                    <small style="color: #666;">GET /api/staff/events/</small>
+                    <button onclick="staffViewEvents()">View Events</button>
+                    <div id="staff-events-response" class="response" style="display:none;"></div>
+                </div>
+
                 <!-- View Sub-Events -->
                 <div class="section">
-                    <h2>11. View Assigned Sub-Events (Staff)</h2>
-                    <button onclick="staffViewSubEvents()">View Sub-Events</button>
+                    <h2>12. View Assigned Sub-Events (Staff)</h2>
+                    <small style="color: #666;">GET /api/staff/sub-events/0/ (0 = all sub-events)</small>
+                    <button onclick="staffViewSubEvents()">View All Sub-Events</button>
                     <div id="staff-subevents-response" class="response" style="display:none;"></div>
                 </div>
 
                 <!-- View Entry Types -->
                 <div class="section">
-                    <h2>12. View Entry Types (Staff)</h2>
+                    <h2>13. View Entry Types (Staff)</h2>
+                    <small style="color: #666;">GET /api/staff/entry-types/{sub_event_id}/</small>
                     <input type="number" id="staff-subevent-id" placeholder="Sub-Event ID" value="1">
                     <button onclick="staffViewEntryTypes()">View Entry Types</button>
                     <div id="staff-entry-types-response" class="response" style="display:none;"></div>
@@ -186,12 +196,22 @@
 
                 <!-- Generate Ticket -->
                 <div class="section">
-                    <h2>13. Generate Ticket (Staff)</h2>
+                    <h2>14. Generate Ticket (Staff)</h2>
+                    <small style="color: #666;">POST /api/staff/generate-ticket/</small>
                     <input type="number" id="generate-event-id" placeholder="Event ID" value="1">
                     <input type="number" id="generate-subevent-id" placeholder="Sub-Event ID" value="1">
                     <input type="number" id="generate-entry-type-id" placeholder="Entry Type ID" value="1">
                     <button onclick="generateTicket()">Generate Ticket</button>
                     <div id="generate-ticket-response" class="response" style="display:none;"></div>
+                </div>
+
+                <!-- Verify Ticket -->
+                <div class="section">
+                    <h2>15. Verify Ticket (Staff)</h2>
+                    <small style="color: #666;">POST /api/staff/verify-ticket/</small>
+                    <input type="text" id="verify-ticket-id" placeholder="Ticket ID (e.g., U3-WF-WAY-5358)" value="">
+                    <button onclick="verifyTicket()">Verify Ticket</button>
+                    <div id="verify-ticket-response" class="response" style="display:none;"></div>
                 </div>
             </div>
         </div>
@@ -413,6 +433,10 @@
         }
 
         // STAFF ENDPOINTS
+        async function staffViewEvents() {
+            await apiCall('/staff/events/', 'GET', null, 'staff-events-response');
+        }
+
         async function staffViewSubEvents() {
             await apiCall('/staff/sub-events/0/', 'GET', null, 'staff-subevents-response');
         }
@@ -429,6 +453,16 @@
                 entry_type_id: parseInt(document.getElementById('generate-entry-type-id').value)
             };
             await apiCall('/staff/generate-ticket/', 'POST', body, 'generate-ticket-response');
+        }
+
+        async function verifyTicket() {
+            const ticketId = document.getElementById('verify-ticket-id').value;
+            if (!ticketId) {
+                showResponse('verify-ticket-response', { error: 'Please enter a ticket ID' }, true);
+                return;
+            }
+            const body = { ticket_id: ticketId };
+            await apiCall('/staff/verify-ticket/', 'POST', body, 'verify-ticket-response');
         }
     </script>
 </body>

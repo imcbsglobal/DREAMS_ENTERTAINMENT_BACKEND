@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from .models import Ticket, StaffProfile, SubEvent
 
@@ -10,18 +11,18 @@ class TicketService:
     
     @staticmethod
     @transaction.atomic
-    def generate_ticket(user, event, sub_event, entry_type):
+    def generate_tickets(user, event, sub_event, tickets_data):
         """
-        Generate a ticket with proper validation and atomic transaction
+        Generate multiple tickets with different entry types in one group
         
         Args:
             user: User object (staff)
             event: Event object
             sub_event: SubEvent object
-            entry_type: EntryType object
+            tickets_data: List of dicts with 'entry_type' and 'quantity'
             
         Returns:
-            Ticket object
+            List of Ticket objects
             
         Raises:
             ValidationError: If validation fails
@@ -40,41 +41,67 @@ class TicketService:
         if not staff_profile.assigned_sub_events.filter(id=sub_event.id).exists():
             raise ValidationError("This sub-event is not assigned to you")
         
+        # Calculate total quantity
+        total_quantity = sum(item['quantity'] for item in tickets_data)
+        
         # Calculate next sequence number
         next_sequence = staff_profile.range_start + staff_profile.current_counter
         
-        # Check if within range
-        if next_sequence > staff_profile.range_end:
+        # Check if within range for all tickets
+        if next_sequence + total_quantity - 1 > staff_profile.range_end:
             raise ValidationError(
-                f"Ticket range exhausted. Current range: {staff_profile.range_start}-{staff_profile.range_end}"
+                f"Not enough tickets in range. Available: {staff_profile.range_end - next_sequence + 1}, Requested: {total_quantity}"
             )
         
-        # Generate ticket ID: [STAFFCODE]-[EVENTCODE]-[SUBEVENTCODE]-[SEQUENCE]
+        # Generate codes
         staff_code = staff_profile.get_staff_code()
         event_code = event.code
         sub_event_code = sub_event.code
-        ticket_id = f"{staff_code}-{event_code}-{sub_event_code}-{next_sequence}"
         
-        # Check for duplicate ticket_id (should not happen with proper locking)
-        if Ticket.objects.filter(ticket_id=ticket_id).exists():
-            raise ValidationError("Ticket ID conflict. Please try again.")
+        # Generate ONE group_id with timestamp for uniqueness
+        timestamp = int(timezone.now().timestamp() * 1000)  # milliseconds
+        group_id = f"{staff_code}-{event_code}-{sub_event_code}-{next_sequence}-{timestamp}"
         
-        # Create ticket
-        ticket = Ticket.objects.create(
-            ticket_id=ticket_id,
-            event=event,
-            sub_event=sub_event,
-            entry_type=entry_type,
-            staff=user,
-            sequence_number=next_sequence,
-            price=entry_type.price
-        )
+        # Create tickets
+        tickets = []
+        ticket_index = 1
         
-        # Increment counter
-        staff_profile.current_counter += 1
+        for ticket_item in tickets_data:
+            entry_type = ticket_item['entry_type']
+            quantity = ticket_item['quantity']
+            
+            for i in range(quantity):
+                if total_quantity == 1:
+                    # Single ticket: ticket_id = group_id
+                    ticket_id = group_id
+                else:
+                    # Multiple tickets: ticket_id = group_id-{index}
+                    ticket_id = f"{group_id}-{ticket_index}"
+                
+                # Check for duplicate ticket_id
+                if Ticket.objects.filter(ticket_id=ticket_id).exists():
+                    raise ValidationError("Ticket ID conflict. Please try again.")
+                
+                # Create ticket
+                ticket = Ticket.objects.create(
+                    ticket_id=ticket_id,
+                    group_id=group_id,
+                    quantity_in_group=total_quantity,
+                    event=event,
+                    sub_event=sub_event,
+                    entry_type=entry_type,
+                    staff=user,
+                    sequence_number=next_sequence + ticket_index - 1,
+                    price=entry_type.price
+                )
+                tickets.append(ticket)
+                ticket_index += 1
+        
+        # Increment counter by total quantity
+        staff_profile.current_counter += total_quantity
         staff_profile.save()
         
-        return ticket
+        return tickets
     
     @staticmethod
     def get_ticket_print_data(ticket):
@@ -93,6 +120,8 @@ class TicketService:
         
         data = {
             'ticket_id': ticket.ticket_id,
+            'group_id': ticket.group_id,
+            'quantity_in_group': ticket.quantity_in_group,
             'event_name': event.name if not customization or customization.show_event_name else '',
             'sub_event_name': sub_event.name,
             'place': event.place if not customization or customization.show_place else '',

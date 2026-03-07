@@ -287,7 +287,7 @@ class StaffEntryTypesView(generics.ListAPIView):
 
 
 class GenerateTicketView(APIView):
-    """Staff: Generate ticket"""
+    """Staff: Generate ticket(s) with multiple entry types"""
     permission_classes = [IsStaff]
 
     def post(self, request):
@@ -295,23 +295,28 @@ class GenerateTicketView(APIView):
         if serializer.is_valid():
             event = serializer.validated_data['event']
             sub_event = serializer.validated_data['sub_event']
-            entry_type = serializer.validated_data['entry_type']
+            validated_tickets = serializer.validated_data['validated_tickets']
             
             try:
-                # Generate ticket using service
-                ticket = TicketService.generate_ticket(
+                # Generate tickets using service
+                tickets = TicketService.generate_tickets(
                     user=request.user,
                     event=event,
                     sub_event=sub_event,
-                    entry_type=entry_type
+                    tickets_data=validated_tickets
                 )
                 
-                # Get print data
-                print_data = TicketService.get_ticket_print_data(ticket)
+                # Get print data for all tickets
+                tickets_data = [TicketService.get_ticket_print_data(ticket) for ticket in tickets]
+                
+                # Calculate total quantity
+                total_quantity = len(tickets)
                 
                 return Response({
-                    'message': 'Ticket generated successfully',
-                    'ticket': print_data
+                    'message': f'{total_quantity} ticket(s) generated successfully',
+                    'group_id': tickets[0].group_id,
+                    'total_quantity': total_quantity,
+                    'tickets': tickets_data
                 }, status=status.HTTP_201_CREATED)
                 
             except Exception as e:
@@ -320,6 +325,36 @@ class GenerateTicketView(APIView):
                 }, status=status.HTTP_400_BAD_REQUEST)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class VerifyTicketView(APIView):
+    """Staff: Verify if ticket exists"""
+    permission_classes = [IsStaff]
+    
+    def post(self, request):
+        ticket_id = request.data.get('ticket_id')
+        
+        if not ticket_id:
+            return Response({'error': 'ticket_id required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check exact match first
+        exists = Ticket.objects.filter(ticket_id=ticket_id).exists()
+        
+        if not exists:
+            # Check if input matches the pattern: staffcode-eventcode-subeventcode-sequence
+            # Input: U3-WF-WAY-5358
+            # DB: U3-WF-WAY-5358-1772693873163-2
+            exists = Ticket.objects.filter(ticket_id__startswith=ticket_id + '-').exists()
+        
+        # Debug: Get actual ticket IDs for troubleshooting
+        debug_tickets = list(Ticket.objects.values_list('ticket_id', flat=True)[:5])
+        
+        return Response({
+            'status': 'verified' if exists else 'unverified',
+            'debug_input': ticket_id,
+            'debug_search_pattern': ticket_id + '-',
+            'debug_sample_tickets': debug_tickets
+        })
 
 
 # ==================== AUTH VIEWS ====================
@@ -341,7 +376,10 @@ class LoginView(TokenObtainPairView):
                     'id': user.id,
                     'username': user.username,
                     'role': user.staff_profile.role,
-                    'staff_code': user.staff_profile.get_staff_code()
+                    'staff_code': user.staff_profile.get_staff_code(),
+                    'range_start': user.staff_profile.range_start,
+                    'range_end': user.staff_profile.range_end,
+                    'current_counter': user.staff_profile.current_counter
                 }
             else:
                 response.data['user'] = {

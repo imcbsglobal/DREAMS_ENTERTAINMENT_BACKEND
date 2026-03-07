@@ -5,7 +5,7 @@ from .views import (
     SubEventListView, CreateEntryTypeView, ConfigureTicketView, EventListView, 
     TicketsReportView, RevenueReportView, StaffSummaryReportView,
     # Staff views
-    StaffEventsView, StaffSubEventsView, StaffEntryTypesView, GenerateTicketView,
+    StaffEventsView, StaffSubEventsView, StaffEntryTypesView, GenerateTicketView, VerifyTicketView,
     # Auth views
     LoginView
 )
@@ -33,4 +33,5 @@ urlpatterns = [
     path('staff/sub-events/<int:event_id>/', StaffSubEventsView.as_view(), name='staff-sub-events'),
     path('staff/entry-types/<int:sub_event_id>/', StaffEntryTypesView.as_view(), name='staff-entry-types'),
     path('staff/generate-ticket/', GenerateTicketView.as_view(), name='staff-generate-ticket'),
+    path('staff/verify-ticket/', VerifyTicketView.as_view(), name='staff-verify-ticket'),
 ]

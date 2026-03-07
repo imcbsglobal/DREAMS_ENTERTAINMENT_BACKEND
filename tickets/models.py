@@ -129,6 +129,8 @@ class TicketCustomization(models.Model):
 
 class Ticket(models.Model):
     ticket_id = models.CharField(max_length=50, unique=True, db_index=True)
+    group_id = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    quantity_in_group = models.IntegerField(default=1)
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='tickets')
     sub_event = models.ForeignKey(SubEvent, on_delete=models.CASCADE, related_name='tickets')
     entry_type = models.ForeignKey(EntryType, on_delete=models.CASCADE, related_name='tickets')
