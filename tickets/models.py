@@ -52,6 +52,18 @@ def create_default_subevent(sender, instance, created, **kwargs):
         )
 
 
+@receiver(post_save, sender=User)
+def create_admin_profile_for_superuser(sender, instance, created, **kwargs):
+    """Auto-create admin StaffProfile for superusers"""
+    if created and instance.is_superuser:
+        StaffProfile.objects.create(
+            user=instance,
+            role='admin',
+            range_start=1,
+            range_end=1000
+        )
+
+
 class SubEvent(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='sub_events')
     name = models.CharField(max_length=200)
