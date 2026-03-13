@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Update Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .response { margin-top: 20px; padding: 15px; border-radius: 4px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }
+        .event-list { margin-bottom: 30px; }
+        .event-item { padding: 10px; border: 1px solid #ddd; margin-bottom: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Event Update Test</h1>
+        
+        <!-- Login Section -->
+        <div class="form-group">
+            <h3>Login (Admin Required)</h3>
+            <input type="text" id="username" placeholder="Username" value="admin">
+            <input type="password" id="password" placeholder="Password" value="admin123">
+            <button onclick="login()">Login</button>
+        </div>
+
+        <!-- Event List -->
+        <div class="event-list">
+            <h3>Available Events</h3>
+            <button onclick="loadEvents()">Load Events</button>
+            <div id="eventsList"></div>
+        </div>
+
+        <!-- Update Event Form -->
+        <div class="form-group">
+            <h3>Update Event</h3>
+            <label>Event ID:</label>
+            <input type="number" id="eventId" placeholder="Event ID">
+            
+            <label>Event Name:</label>
+            <input type="text" id="eventName" placeholder="Event Name">
+            
+            <label>Place:</label>
+            <input type="text" id="eventPlace" placeholder="Event Place">
+            
+            <label>Address:</label>
+            <textarea id="eventAddress" placeholder="Event Address"></textarea>
+            
+            <label>Start Date:</label>
+            <input type="date" id="startDate">
+            
+            <label>End Date:</label>
+            <input type="date" id="endDate">
+            
+            <button onclick="updateEvent()">Update Event</button>
+        </div>
+
+        <div id="response"></div>
+    </div>
+
+    <script>
+        let authToken = '';
+        // UPDATE THIS URL to match your hosted server
+        const BASE_URL = 'https://your-domain.com';  // Change this to your actual hosted URL
+        // Examples:
+        // const BASE_URL = 'https://api.yoursite.com';
+        // const BASE_URL = 'https://yourapp.herokuapp.com';
+        // const BASE_URL = 'http://192.168.1.100:8000';  // Local network
+        // const BASE_URL = 'https://yourserver.ngrok.io';  // ngrok tunnel
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/login/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.access;
+                    showResponse('Login successful!', 'success');
+                    loadEvents(); // Auto-load events after login
+                } else {
+                    showResponse('Login failed: ' + JSON.stringify(data), 'error');
+                }
+            } catch (error) {
+                showResponse('Login error: ' + error.message, 'error');
+            }
+        }
+
+        async function loadEvents() {
+            if (!authToken) {
+                showResponse('Please login first', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/admin/event-list/`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayEvents(data);
+                } else {
+                    showResponse('Failed to load events: ' + JSON.stringify(data), 'error');
+                }
+            } catch (error) {
+                showResponse('Error loading events: ' + error.message, 'error');
+            }
+        }
+
+        function displayEvents(events) {
+            const eventsList = document.getElementById('eventsList');
+            eventsList.innerHTML = '';
+
+            events.forEach(event => {
+                const eventDiv = document.createElement('div');
+                eventDiv.className = 'event-item';
+                eventDiv.innerHTML = `
+                    <strong>ID: ${event.id}</strong> - ${event.name} (${event.code})<br>
+                    <small>Place: ${event.place}</small><br>
+                    <small>Dates: ${event.start_date} to ${event.end_date}</small><br>
+                    <button onclick="fillEventForm(${event.id}, '${event.name}', '${event.place}', '${event.address}', '${event.start_date}', '${event.end_date}')">
+                        Edit This Event
+                    </button>
+                `;
+                eventsList.appendChild(eventDiv);
+            });
+        }
+
+        function fillEventForm(id, name, place, address, startDate, endDate) {
+            document.getElementById('eventId').value = id;
+            document.getElementById('eventName').value = name;
+            document.getElementById('eventPlace').value = place;
+            document.getElementById('eventAddress').value = address;
+            document.getElementById('startDate').value = startDate;
+            document.getElementById('endDate').value = endDate;
+        }
+
+        async function updateEvent() {
+            if (!authToken) {
+                showResponse('Please login first', 'error');
+                return;
+            }
+
+            const eventId = document.getElementById('eventId').value;
+            const eventData = {
+                name: document.getElementById('eventName').value,
+                place: document.getElementById('eventPlace').value,
+                address: document.getElementById('eventAddress').value,
+                start_date: document.getElementById('startDate').value,
+                end_date: document.getElementById('endDate').value
+            };
+
+            if (!eventId) {
+                showResponse('Please enter Event ID', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/admin/update-event/${eventId}/`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(eventData)
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    let message = data.message;
+                    if (data.warnings && data.warnings.length > 0) {
+                        message += '\n\nWarnings:\n' + data.warnings.join('\n');
+                    }
+                    showResponse(message, data.warnings && data.warnings.length > 0 ? 'warning' : 'success');
+                    loadEvents(); // Refresh event list
+                } else {
+                    showResponse('Update failed: ' + JSON.stringify(data), 'error');
+                }
+            } catch (error) {
+                showResponse('Update error: ' + error.message, 'error');
+            }
+        }
+
+        function showResponse(message, type) {
+            const responseDiv = document.getElementById('response');
+            responseDiv.innerHTML = `<div class="response ${type}">${message}</div>`;
+        }
+    </script>
+</body>
+</html>

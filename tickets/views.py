@@ -159,6 +159,99 @@ class ConfigureTicketView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class UpdateEventView(APIView):
+    """Admin: Update event with validation"""
+    permission_classes = [IsAdmin]
+
+    @transaction.atomic
+    def put(self, request, event_id):
+        try:
+            event = Event.objects.get(id=event_id)
+        except Event.DoesNotExist:
+            return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = EventSerializer(event, data=request.data, partial=True)
+        if serializer.is_valid():
+            # Check if dates are being changed
+            new_start_date = serializer.validated_data.get('start_date', event.start_date)
+            new_end_date = serializer.validated_data.get('end_date', event.end_date)
+            
+            # Validate business rules
+            validation_result = self._validate_date_change(event, new_start_date, new_end_date)
+            if not validation_result['valid']:
+                return Response({'error': validation_result['message']}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Save the event
+            updated_event = serializer.save()
+            
+            # Update sub-events if dates changed
+            if new_start_date != event.start_date or new_end_date != event.end_date:
+                self._update_sub_events_dates(updated_event, new_start_date, new_end_date)
+            
+            return Response({
+                'message': 'Event updated successfully',
+                'data': EventSerializer(updated_event).data,
+                'warnings': validation_result.get('warnings', [])
+            })
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def _validate_date_change(self, event, new_start_date, new_end_date):
+        """Validate if date changes are safe"""
+        warnings = []
+        
+        # Check if tickets already generated
+        ticket_count = Ticket.objects.filter(event=event).count()
+        if ticket_count > 0:
+            warnings.append(f'{ticket_count} tickets already generated for this event')
+        
+        # Check sub-events timing conflicts
+        sub_events = SubEvent.objects.filter(event=event)
+        conflicting_sub_events = []
+        
+        for sub_event in sub_events:
+            sub_start_date = sub_event.start_time.date()
+            sub_end_date = sub_event.end_time.date()
+            
+            if sub_start_date < new_start_date or sub_end_date > new_end_date:
+                conflicting_sub_events.append(sub_event.name)
+        
+        if conflicting_sub_events:
+            warnings.append(f'Sub-events outside new date range: {", ".join(conflicting_sub_events)}')
+        
+        # Check staff assignments
+        assigned_staff_count = StaffProfile.objects.filter(
+            assigned_sub_events__event=event
+        ).distinct().count()
+        
+        if assigned_staff_count > 0:
+            warnings.append(f'{assigned_staff_count} staff members assigned to this event\'s sub-events')
+        
+        return {
+            'valid': True,
+            'warnings': warnings
+        }
+    
+    def _update_sub_events_dates(self, event, new_start_date, new_end_date):
+        """Update sub-events to fit within new event dates"""
+        from datetime import datetime, time
+        
+        sub_events = SubEvent.objects.filter(event=event)
+        
+        for sub_event in sub_events:
+            # Adjust sub-event dates to fit within event dates
+            start_time = datetime.combine(new_start_date, time(9, 0))
+            end_time = datetime.combine(new_end_date, time(23, 59))
+            
+            # Keep original time if within new range, otherwise adjust
+            if sub_event.start_time.date() < new_start_date:
+                sub_event.start_time = start_time
+            if sub_event.end_time.date() > new_end_date:
+                sub_event.end_time = end_time
+            
+            sub_event.save()
+
+
 class EventListView(generics.ListAPIView):
     """Admin: List all events"""
     permission_classes = [IsAdmin]
