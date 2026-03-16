@@ -33,8 +33,9 @@ class Event(models.Model):
 
 @receiver(post_save, sender=Event)
 def create_default_subevent(sender, instance, created, **kwargs):
-    """Automatically create a default sub-event with same name as Event when Event is created"""
-    if created:
+    """Conditionally create sub-events based on selected_sub_events"""
+    if created and not hasattr(instance, '_skip_auto_subevent'):
+        # Only create default if no sub-events were manually selected
         from django.utils import timezone
         from datetime import datetime, time
         

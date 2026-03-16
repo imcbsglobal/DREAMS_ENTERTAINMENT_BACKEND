@@ -27,6 +27,13 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         .info { background: #d1ecf1; color: #0c5460; padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .sub-events-section { background: #e8f4fd; border: 1px solid #bee5eb; border-radius: 5px; padding: 15px; margin: 15px 0; }
+        .sub-events-section h4 { color: #0066cc; margin-bottom: 10px; }
+        .checkbox-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 10px; }
+        .checkbox-item-inline { display: flex; align-items: center; padding: 5px; background: white; border-radius: 3px; border: 1px solid #ddd; transition: all 0.2s; }
+        .checkbox-item-inline:hover { background: #f0f8ff; border-color: #007bff; }
+        .checkbox-item-inline input { margin-right: 8px; }
+        .checkbox-item-inline label { font-size: 12px; cursor: pointer; flex: 1; margin: 0; }
     </style>
 </head>
 <body>
@@ -57,14 +64,80 @@
         <div class="grid">
             <!-- Create Event -->
             <div class="section">
-                <h2>2. Create Event</h2>
+                <h2>2. Create Event with Sub-Events Selection</h2>
                 <input type="text" id="event-name" placeholder="Event Name" value="Summer Festival">
                 <input type="text" id="event-place" placeholder="Place" value="Central Park">
                 <input type="text" id="event-address" placeholder="Address" value="123 Park Ave">
                 <input type="date" id="event-start" value="2024-06-01">
                 <input type="date" id="event-end" value="2024-06-03">
-                <button onclick="createEventAPI()">Create Event</button>
+                
+                <!-- Sub-Events Selection -->
+                <div class="sub-events-section">
+                    <h4>🎪 Select Sub-Events (Activities)</h4>
+                    <small style="color: #666; display: block; margin-bottom: 10px;">Choose which activities/rides to include in this event. If none selected, default 'ENTRY TICKET' will be created.</small>
+                    <div class="checkbox-grid" id="sub-events-checkboxes">
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="se-entry" value="ENTRY TICKET">
+                            <label for="se-entry">🎫 ENTRY TICKET</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="se-giant" value="Giant wheel">
+                            <label for="se-giant">🎡 Giant wheel</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="se-break" value="Break dance">
+                            <label for="se-break">💃 Break dance</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="se-colombus" value="Colombus">
+                            <label for="se-colombus">🚢 Colombus</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="se-death" value="Well of death">
+                            <label for="se-death">💀 Well of death</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="se-ranger" value="Ranger">
+                            <label for="se-ranger">🤠 Ranger</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="se-dragon" value="Dragon train">
+                            <label for="se-dragon">🐉 Dragon train</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="se-bouncy" value="Bouncy">
+                            <label for="se-bouncy">🏀 Bouncy</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="se-car" value="Toy car">
+                            <label for="se-car">🚗 Toy car</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="se-helicopter" value="Toy helicopter">
+                            <label for="se-helicopter">🚁 Toy helicopter</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="se-boat" value="Toy Boat">
+                            <label for="se-boat">⛵ Toy Boat</label>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button onclick="selectAllSubEvents()" style="background: #28a745; font-size: 12px; padding: 5px 10px;">Select All</button>
+                        <button onclick="clearAllSubEvents()" style="background: #dc3545; font-size: 12px; padding: 5px 10px;">Clear All</button>
+                        <button onclick="selectDefaultSubEvents()" style="background: #ffc107; color: #000; font-size: 12px; padding: 5px 10px;">Select Common</button>
+                    </div>
+                </div>
+                
+                <button onclick="createEventWithSubEvents()" style="background: #007bff; font-size: 16px; padding: 12px 24px; margin-top: 15px;">🎪 Create Event with Selected Sub-Events</button>
                 <div id="event-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- Get Predefined Sub-Events -->
+            <div class="section">
+                <h2>2.5 Get Predefined Sub-Events List</h2>
+                <small style="color: #666;">GET /api/admin/predefined-sub-events/</small>
+                <button onclick="getPredefinedSubEvents()">Get Predefined List</button>
+                <div id="predefined-subevents-response" class="response" style="display:none;"></div>
             </div>
 
             <!-- List Events -->
@@ -74,10 +147,20 @@
                 <div id="events-response" class="response" style="display:none;"></div>
             </div>
 
+            <!-- List Sub-Events -->
+            <div class="section">
+                <h2>3.5 List Sub-Events for Event</h2>
+                <small style="color: #666;">GET /api/admin/sub-events/{event_id}/</small>
+                <input type="number" id="list-subevent-event-id" placeholder="Event ID" value="13">
+                <button onclick="listSubEventsForEvent()">List Sub-Events</button>
+                <div id="list-subevents-response" class="response" style="display:none;"></div>
+            </div>
+
             <!-- Create Entry Type -->
             <div class="section">
                 <h2>4. Create Entry Type</h2>
-                <input type="number" id="entry-event-id" placeholder="Event ID" value="1">
+                <input type="number" id="entry-event-id" placeholder="Sub-Event ID" value="1">
+                <small style="color: #666; display: block;">Note: Use Sub-Event ID (not Event ID)</small>
                 <input type="text" id="entry-name" placeholder="Entry Type Name" value="Adult">
                 <input type="number" id="entry-price" placeholder="Price" value="50.00" step="0.01">
                 <input type="text" id="entry-desc" placeholder="Description" value="Adult entry ticket">
@@ -218,7 +301,7 @@
     </div>
 
     <script>
-        const API_BASE = 'https://de.imcbs.com/api';
+        const API_BASE = 'http://localhost:8000/api';
         let accessToken = '';
         let userRole = '';
 
@@ -308,13 +391,68 @@
             await apiCall('/admin/create-event/', 'POST', body, 'event-response');
         }
 
+        // NEW: Create Event with Sub-Events Selection
+        async function createEventWithSubEvents() {
+            const selectedSubEvents = getSelectedSubEvents();
+            
+            const body = {
+                name: document.getElementById('event-name').value,
+                place: document.getElementById('event-place').value,
+                address: document.getElementById('event-address').value,
+                start_date: document.getElementById('event-start').value,
+                end_date: document.getElementById('event-end').value,
+                selected_sub_events: selectedSubEvents
+            };
+            
+            console.log('Creating event with sub-events:', body);
+            await apiCall('/admin/create-event/', 'POST', body, 'event-response');
+        }
+
+        function getSelectedSubEvents() {
+            const checkboxes = document.querySelectorAll('#sub-events-checkboxes input[type="checkbox"]:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        function selectAllSubEvents() {
+            const checkboxes = document.querySelectorAll('#sub-events-checkboxes input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = true);
+        }
+
+        function clearAllSubEvents() {
+            const checkboxes = document.querySelectorAll('#sub-events-checkboxes input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = false);
+        }
+
+        function selectDefaultSubEvents() {
+            clearAllSubEvents();
+            // Select common/popular sub-events
+            const defaultIds = ['se-entry', 'se-giant', 'se-break', 'se-dragon', 'se-bouncy'];
+            defaultIds.forEach(id => {
+                const checkbox = document.getElementById(id);
+                if (checkbox) checkbox.checked = true;
+            });
+        }
+
+        async function getPredefinedSubEvents() {
+            await apiCall('/admin/predefined-sub-events/', 'GET', null, 'predefined-subevents-response');
+        }
+
+        async function listSubEventsForEvent() {
+            const eventId = document.getElementById('list-subevent-event-id').value;
+            if (!eventId) {
+                showResponse('list-subevents-response', { error: 'Please enter an Event ID' }, true);
+                return;
+            }
+            await apiCall(`/admin/sub-events/${eventId}/`, 'GET', null, 'list-subevents-response');
+        }
+
         async function listEvents() {
             await apiCall('/admin/event-list/', 'GET', null, 'events-response');
         }
 
         async function createEntryType() {
             const body = {
-                event: parseInt(document.getElementById('entry-event-id').value),
+                sub_event: parseInt(document.getElementById('entry-event-id').value),
                 name: document.getElementById('entry-name').value,
                 price: document.getElementById('entry-price').value,
                 description: document.getElementById('entry-desc').value,
@@ -450,7 +588,10 @@
             const body = {
                 event_id: parseInt(document.getElementById('generate-event-id').value),
                 sub_event_id: parseInt(document.getElementById('generate-subevent-id').value),
-                entry_type_id: parseInt(document.getElementById('generate-entry-type-id').value)
+                tickets: [{
+                    entry_type_id: parseInt(document.getElementById('generate-entry-type-id').value),
+                    quantity: 1
+                }]
             };
             await apiCall('/staff/generate-ticket/', 'POST', body, 'generate-ticket-response');
         }

@@ -95,11 +95,99 @@ class AssignEventsToStaffView(APIView):
             return Response({'error': 'Staff not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
-class CreateEventView(generics.CreateAPIView):
-    """Admin: Create event"""
+class PredefinedSubEventsView(APIView):
+    """Admin: Get predefined sub-events list"""
     permission_classes = [IsAdmin]
-    queryset = Event.objects.all()
-    serializer_class = EventSerializer
+    
+    def get(self, request):
+        predefined_sub_events = [
+            'ENTRY TICKET',
+            'Giant wheel',
+            'Break dance',
+            'Colombus',
+            'Well of death',
+            'Ranger',
+            'Dragon train',
+            'Bouncy',
+            'Toy car',
+            'Toy helicopter',
+            'Toy Boat'
+        ]
+        
+        return Response({
+            'predefined_sub_events': predefined_sub_events
+        })
+
+
+class CreateEventView(APIView):
+    """Admin: Create event with optional sub-events selection"""
+    permission_classes = [IsAdmin]
+
+    @transaction.atomic
+    def post(self, request):
+        # Extract sub-events from request data
+        event_data = request.data.copy()
+        selected_sub_events = event_data.pop('selected_sub_events', [])
+        
+        # Validate event data
+        serializer = EventSerializer(data=event_data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create event with flag to skip auto sub-event creation
+        event = serializer.save()
+        event._skip_auto_subevent = True
+        
+        # Create selected sub-events or default
+        if selected_sub_events:
+            created_sub_events = self._create_selected_sub_events(event, selected_sub_events)
+        else:
+            # Create default ENTRY TICKET if no selection
+            created_sub_events = self._create_default_sub_event(event)
+        
+        return Response({
+            'message': 'Event created successfully',
+            'event': EventSerializer(event).data,
+            'sub_events': SubEventSerializer(created_sub_events, many=True).data
+        }, status=status.HTTP_201_CREATED)
+    
+    def _create_selected_sub_events(self, event, selected_names):
+        """Create sub-events for selected names"""
+        from datetime import datetime, time
+        
+        created_sub_events = []
+        start_time = datetime.combine(event.start_date, time(9, 0))
+        end_time = datetime.combine(event.end_date, time(23, 59))
+        
+        for name in selected_names:
+            sub_event = SubEvent.objects.create(
+                event=event,
+                name=name,
+                description=f'{name} for {event.name}',
+                start_time=start_time,
+                end_time=end_time,
+                is_active=True
+            )
+            created_sub_events.append(sub_event)
+        
+        return created_sub_events
+    
+    def _create_default_sub_event(self, event):
+        """Create default ENTRY TICKET sub-event"""
+        from datetime import datetime, time
+        
+        start_time = datetime.combine(event.start_date, time(9, 0))
+        end_time = datetime.combine(event.end_date, time(23, 59))
+        
+        sub_event = SubEvent.objects.create(
+            event=event,
+            name='ENTRY TICKET',
+            description=f'Main entry for {event.name}',
+            start_time=start_time,
+            end_time=end_time,
+            is_active=True
+        )
+        return [sub_event]
 
 
 class CreateSubEventView(generics.CreateAPIView):
