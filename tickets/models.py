@@ -16,12 +16,22 @@ class Event(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.code:
-            # Generate code from first 2 uppercase letters
+            # Generate base code from first 2 uppercase letters
             words = self.name.split()
             if len(words) >= 2:
-                self.code = (words[0][0] + words[1][0]).upper()
+                base_code = (words[0][0] + words[1][0]).upper()
             else:
-                self.code = self.name[:2].upper()
+                base_code = self.name[:2].upper()
+            
+            # Handle duplicates with auto-increment suffix
+            self.code = base_code
+            counter = 1
+            
+            # Keep checking until we find unique code
+            while Event.objects.filter(code=self.code).exclude(pk=self.pk).exists():
+                self.code = f"{base_code}{counter}"
+                counter += 1
+        
         super().save(*args, **kwargs)
 
     def __str__(self):

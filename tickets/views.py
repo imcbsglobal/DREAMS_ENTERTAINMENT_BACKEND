@@ -425,6 +425,41 @@ class StaffSummaryReportView(APIView):
         return Response({'staff_summary': summary})
 
 
+class DeleteEventView(APIView):
+    """Admin: Delete event and all related data"""
+    permission_classes = [IsAdmin]
+
+    @transaction.atomic
+    def delete(self, request, event_id):
+        try:
+            event = Event.objects.get(id=event_id)
+        except Event.DoesNotExist:
+            return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get counts before deletion (for response)
+        ticket_count = event.tickets.count()
+        sub_event_count = event.sub_events.count()
+        entry_type_count = sum(se.entry_types.count() for se in event.sub_events.all())
+        
+        # Get event name before deletion
+        event_name = event.name
+        event_code = event.code
+        
+        # Delete event (CASCADE will handle related data)
+        event.delete()
+        
+        return Response({
+            'message': f'Event "{event_name}" ({event_code}) deleted successfully',
+            'deleted_data': {
+                'event_name': event_name,
+                'event_code': event_code,
+                'sub_events': sub_event_count,
+                'entry_types': entry_type_count,
+                'tickets': ticket_count
+            }
+        })
+
+
 # ==================== STAFF VIEWS ====================
 
 class StaffEventsView(generics.ListAPIView):

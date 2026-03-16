@@ -34,6 +34,27 @@
         .checkbox-item-inline:hover { background: #f0f8ff; border-color: #007bff; }
         .checkbox-item-inline input { margin-right: 8px; }
         .checkbox-item-inline label { font-size: 12px; cursor: pointer; flex: 1; margin: 0; }
+        
+        /* Modal Styles */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fff; margin: 10% auto; padding: 0; border-radius: 8px; width: 90%; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); animation: modalSlideIn 0.3s ease; }
+        .modal-header { background: #dc3545; color: white; padding: 15px 20px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header.warning { background: #ffc107; color: #000; }
+        .modal-header.info { background: #17a2b8; color: white; }
+        .modal-body { padding: 20px; }
+        .modal-footer { padding: 15px 20px; border-top: 1px solid #ddd; display: flex; justify-content: flex-end; gap: 10px; }
+        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: inherit; }
+        .modal-close:hover { opacity: 0.7; }
+        .modal-btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .modal-btn-danger { background: #dc3545; color: white; }
+        .modal-btn-danger:hover { background: #c82333; }
+        .modal-btn-secondary { background: #6c757d; color: white; }
+        .modal-btn-secondary:hover { background: #5a6268; }
+        .modal-input { width: 100%; padding: 10px; border: 2px solid #ddd; border-radius: 5px; font-size: 16px; margin-top: 10px; }
+        .modal-input:focus { border-color: #007bff; outline: none; }
+        .modal-list { margin: 10px 0; padding-left: 20px; }
+        .modal-list li { margin: 5px 0; }
+        @keyframes modalSlideIn { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     </style>
 </head>
 <body>
@@ -242,6 +263,25 @@
                 <button onclick="staffSummary()">Get Staff Summary</button>
                 <div id="summary-response" class="response" style="display:none;"></div>
             </div>
+
+            <!-- Delete Event -->
+            <div class="section">
+                <h2>🗑️ Delete Event</h2>
+                <div class="info" style="background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;">
+                    <strong>⚠️ WARNING:</strong> This will permanently delete the event and ALL related data:
+                    <ul style="margin: 5px 0 0 20px;">
+                        <li>All Sub-Events under this event</li>
+                        <li>All Entry Types for those sub-events</li>
+                        <li>All Tickets generated for this event</li>
+                        <li>Ticket customization settings</li>
+                        <li>Staff assignments to sub-events</li>
+                    </ul>
+                    <strong>This action cannot be undone!</strong>
+                </div>
+                <input type="number" id="delete-event-id" placeholder="Event ID" value="">
+                <button onclick="deleteEvent()" style="background: #dc3545; font-weight: bold;">🗑️ Delete Event</button>
+                <div id="delete-event-response" class="response" style="display:none;"></div>
+            </div>
         </div>
         </div>
 
@@ -301,7 +341,7 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:8000/api';
+        const API_BASE = 'https://de.imcbs.com/api';
         let accessToken = '';
         let userRole = '';
 
@@ -568,6 +608,35 @@
             const staffId = document.getElementById('summary-staff-id').value;
             const endpoint = staffId ? `/admin/reports/staff-summary/?staff_id=${staffId}` : '/admin/reports/staff-summary/';
             await apiCall(endpoint, 'GET', null, 'summary-response');
+        }
+
+        async function deleteEvent() {
+            const eventId = document.getElementById('delete-event-id').value;
+            if (!eventId) {
+                showResponse('delete-event-response', { error: 'Please enter Event ID' }, true);
+                return;
+            }
+            
+            // Double confirmation for safety
+            const firstConfirm = confirm(`⚠️ Are you sure you want to delete Event ID ${eventId}?\n\nThis will permanently delete:\n- The event\n- All sub-events\n- All entry types\n- All tickets\n- All related data\n\nThis action CANNOT be undone!`);
+            
+            if (!firstConfirm) {
+                return;
+            }
+            
+            const secondConfirm = confirm(`🚨 FINAL CONFIRMATION\n\nYou are about to PERMANENTLY DELETE Event ID ${eventId} and ALL its data.\n\nType YES in the next prompt to confirm.`);
+            
+            if (!secondConfirm) {
+                return;
+            }
+            
+            const finalConfirm = prompt('Type "YES" (in capital letters) to confirm deletion:');
+            if (finalConfirm !== 'YES') {
+                showResponse('delete-event-response', { message: 'Deletion cancelled - confirmation text did not match' }, false);
+                return;
+            }
+            
+            await apiCall(`/admin/delete-event/${eventId}/`, 'DELETE', null, 'delete-event-response');
         }
 
         // STAFF ENDPOINTS
