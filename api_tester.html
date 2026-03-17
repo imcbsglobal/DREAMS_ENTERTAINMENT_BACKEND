@@ -161,6 +161,95 @@
                 <div id="predefined-subevents-response" class="response" style="display:none;"></div>
             </div>
 
+            <!-- Update Event with Sub-Events -->
+            <div class="section">
+                <h2>🔄 Update Event with Sub-Events Selection</h2>
+                <div class="info" style="background: #d1ecf1; color: #0c5460;">
+                    <strong>New Feature:</strong> You can now update event details AND modify sub-events in one call!
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <input type="number" id="update-event-id" placeholder="Event ID to Update" value="" style="flex: 1;">
+                    <button onclick="loadEventForUpdate()" style="background: #17a2b8; white-space: nowrap;">📥 Load Event</button>
+                </div>
+                <input type="text" id="update-event-name" placeholder="Event Name" value="">
+                <input type="text" id="update-event-place" placeholder="Place" value="">
+                <input type="text" id="update-event-address" placeholder="Address" value="">
+                <input type="date" id="update-event-start" value="">
+                <input type="date" id="update-event-end" value="">
+                
+                <!-- Current Event Info -->
+                <div id="current-event-info" class="info" style="background: #fff3cd; color: #856404; display: none; margin: 10px 0;">
+                    <strong>📋 Current Event:</strong> <span id="current-event-details"></span>
+                </div>
+                
+                <!-- Sub-Events Selection for Update -->
+                <div class="sub-events-section">
+                    <h4>🎪 Update Sub-Events</h4>
+                    <div id="current-subevents-info" class="info" style="background: #e2e3e5; color: #383d41; display: none; margin-bottom: 10px;">
+                        <strong>📌 Current Sub-Events:</strong> <span id="current-subevents-list"></span>
+                    </div>
+                    <small style="color: #666; display: block; margin-bottom: 10px;">Select desired sub-events to update the event's activities. Current sub-events are automatically loaded when you load an event.</small>
+                    <label style="display: block; margin: 10px 0; font-weight: bold;">
+                        <input type="checkbox" id="enable-subevent-update">
+                        Enable Sub-Events Update (check this to modify sub-events)
+                    </label>
+                    <div class="checkbox-grid" id="update-sub-events-checkboxes" style="opacity: 0.5; pointer-events: none;">
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="update-se-entry" value="ENTRY TICKET">
+                            <label for="update-se-entry">🎫 ENTRY TICKET</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="update-se-giant" value="Giant wheel">
+                            <label for="update-se-giant">🎡 Giant wheel</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="update-se-break" value="Break dance">
+                            <label for="update-se-break">💃 Break dance</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="update-se-colombus" value="Colombus">
+                            <label for="update-se-colombus">🚢 Colombus</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="update-se-death" value="Well of death">
+                            <label for="update-se-death">💀 Well of death</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="update-se-ranger" value="Ranger">
+                            <label for="update-se-ranger">🤠 Ranger</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="update-se-dragon" value="Dragon train">
+                            <label for="update-se-dragon">🐉 Dragon train</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="update-se-bouncy" value="Bouncy">
+                            <label for="update-se-bouncy">🏀 Bouncy</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="update-se-car" value="Toy car">
+                            <label for="update-se-car">🚗 Toy car</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="update-se-helicopter" value="Toy helicopter">
+                            <label for="update-se-helicopter">🚁 Toy helicopter</label>
+                        </div>
+                        <div class="checkbox-item-inline">
+                            <input type="checkbox" id="update-se-boat" value="Toy Boat">
+                            <label for="update-se-boat">⛵ Toy Boat</label>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button onclick="selectAllUpdateSubEvents()" style="background: #28a745; font-size: 12px; padding: 5px 10px;">Select All</button>
+                        <button onclick="clearAllUpdateSubEvents()" style="background: #dc3545; font-size: 12px; padding: 5px 10px;">Clear All</button>
+                        <button onclick="resetToCurrentSubEvents()" style="background: #6f42c1; color: white; font-size: 12px; padding: 5px 10px;">Reset to Current</button>
+                    </div>
+                </div>
+                
+                <button onclick="updateEventWithSubEvents()" style="background: #ffc107; color: #000; font-size: 16px; padding: 12px 24px; margin-top: 15px;">🔄 Update Event</button>
+                <div id="update-event-response" class="response" style="display:none;"></div>
+            </div>
+
             <!-- List Events -->
             <div class="section">
                 <h2>3. List Events</h2>
@@ -472,6 +561,168 @@
                 if (checkbox) checkbox.checked = true;
             });
         }
+
+        // Enhanced: Load Event for Update with auto-fetch
+        async function loadEventForUpdate() {
+            const eventId = document.getElementById('update-event-id').value;
+            if (!eventId) {
+                alert('Please enter Event ID first');
+                return;
+            }
+            
+            try {
+                // Fetch event details
+                const eventResponse = await fetch(`${API_BASE}/admin/event-list/`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const events = await eventResponse.json();
+                const event = events.find(e => e.id == eventId);
+                
+                if (!event) {
+                    alert(`Event with ID ${eventId} not found`);
+                    return;
+                }
+                
+                // Populate event fields
+                document.getElementById('update-event-name').value = event.name;
+                document.getElementById('update-event-place').value = event.place;
+                document.getElementById('update-event-address').value = event.address;
+                document.getElementById('update-event-start').value = event.start_date;
+                document.getElementById('update-event-end').value = event.end_date;
+                
+                // Show current event info
+                document.getElementById('current-event-details').textContent = 
+                    `${event.name} (${event.code}) - ${event.place} | ${event.start_date} to ${event.end_date}`;
+                document.getElementById('current-event-info').style.display = 'block';
+                
+                // Fetch and load current sub-events
+                const subEventsResponse = await fetch(`${API_BASE}/admin/sub-events/${eventId}/`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const subEvents = await subEventsResponse.json();
+                
+                // Show current sub-events info
+                const subEventNames = subEvents.map(se => se.name).join(', ');
+                document.getElementById('current-subevents-list').textContent = 
+                    subEventNames || 'No sub-events found';
+                document.getElementById('current-subevents-info').style.display = 'block';
+                
+                // Store current sub-events for reset functionality
+                window.currentSubEvents = subEvents.map(se => se.name);
+                
+                // Auto-select current sub-events
+                clearAllUpdateSubEvents();
+                subEvents.forEach(se => {
+                    const checkbox = document.querySelector(`#update-sub-events-checkboxes input[value="${se.name}"]`);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                });
+                
+                // Enable sub-event update mode
+                document.getElementById('enable-subevent-update').checked = true;
+                toggleSubEventUpdate();
+                
+                showResponse('update-event-response', {
+                    message: `✅ Loaded Event: ${event.name}`,
+                    event_details: event,
+                    sub_events_count: subEvents.length,
+                    current_sub_events: subEventNames
+                }, false);
+                
+            } catch (error) {
+                showResponse('update-event-response', { error: 'Error loading event: ' + error.message }, true);
+            }
+        }
+        // NEW: Update Event with Sub-Events Selection
+        async function updateEventWithSubEvents() {
+            const eventId = document.getElementById('update-event-id').value;
+            if (!eventId) {
+                showResponse('update-event-response', { error: 'Please enter Event ID to update' }, true);
+                return;
+            }
+            
+            const body = {
+                name: document.getElementById('update-event-name').value,
+                place: document.getElementById('update-event-place').value,
+                address: document.getElementById('update-event-address').value,
+                start_date: document.getElementById('update-event-start').value,
+                end_date: document.getElementById('update-event-end').value
+            };
+            
+            // Only include selected_sub_events if enabled
+            const enableSubEventUpdate = document.getElementById('enable-subevent-update').checked;
+            if (enableSubEventUpdate) {
+                const selectedSubEvents = getSelectedUpdateSubEvents();
+                body.selected_sub_events = selectedSubEvents;
+                console.log('Updating event with sub-events:', body);
+            } else {
+                console.log('Updating event details only:', body);
+            }
+            
+            await apiCall(`/admin/update-event/${eventId}/`, 'PUT', body, 'update-event-response');
+        }
+
+        function resetToCurrentSubEvents() {
+            if (!window.currentSubEvents) {
+                alert('Please load an event first using the "Load Event" button');
+                return;
+            }
+            
+            // Clear all checkboxes first
+            clearAllUpdateSubEvents();
+            
+            // Check boxes for current sub-events
+            window.currentSubEvents.forEach(subEventName => {
+                const checkbox = document.querySelector(`#update-sub-events-checkboxes input[value="${subEventName}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+            
+            alert(`Reset to ${window.currentSubEvents.length} current sub-events`);
+        }
+
+        function getSelectedUpdateSubEvents() {
+            const checkboxes = document.querySelectorAll('#update-sub-events-checkboxes input[type="checkbox"]:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }
+
+        function selectAllUpdateSubEvents() {
+            const checkboxes = document.querySelectorAll('#update-sub-events-checkboxes input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = true);
+        }
+
+        function clearAllUpdateSubEvents() {
+            const checkboxes = document.querySelectorAll('#update-sub-events-checkboxes input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = false);
+        }
+
+        async function loadCurrentSubEvents() {
+            alert('This function has been replaced by the "Load Event" button. Please use that instead.');
+        }
+
+        // Toggle sub-event update section
+        function toggleSubEventUpdate() {
+            const enabled = document.getElementById('enable-subevent-update').checked;
+            const checkboxContainer = document.getElementById('update-sub-events-checkboxes');
+            
+            if (enabled) {
+                checkboxContainer.style.opacity = '1';
+                checkboxContainer.style.pointerEvents = 'auto';
+            } else {
+                checkboxContainer.style.opacity = '0.5';
+                checkboxContainer.style.pointerEvents = 'none';
+            }
+        }
+
+        // Add event listener for the enable checkbox
+        document.addEventListener('DOMContentLoaded', function() {
+            const enableCheckbox = document.getElementById('enable-subevent-update');
+            if (enableCheckbox) {
+                enableCheckbox.addEventListener('change', toggleSubEventUpdate);
+            }
+        });
 
         async function getPredefinedSubEvents() {
             await apiCall('/admin/predefined-sub-events/', 'GET', null, 'predefined-subevents-response');

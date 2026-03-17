@@ -248,7 +248,7 @@ class ConfigureTicketView(APIView):
 
 
 class UpdateEventView(APIView):
-    """Admin: Update event with validation"""
+    """Admin: Update event with validation and optional sub-event selection"""
     permission_classes = [IsAdmin]
 
     @transaction.atomic
@@ -258,14 +258,18 @@ class UpdateEventView(APIView):
         except Event.DoesNotExist:
             return Response({'error': 'Event not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        serializer = EventSerializer(event, data=request.data, partial=True)
+        # Extract sub-events from request data (optional - backward compatible)
+        event_data = request.data.copy()
+        selected_sub_events = event_data.pop('selected_sub_events', None)
+        
+        serializer = EventSerializer(event, data=event_data, partial=True)
         if serializer.is_valid():
             # Check if dates are being changed
             new_start_date = serializer.validated_data.get('start_date', event.start_date)
             new_end_date = serializer.validated_data.get('end_date', event.end_date)
             
-            # Validate business rules
-            validation_result = self._validate_date_change(event, new_start_date, new_end_date)
+            # Validate business rules (including sub-event changes if provided)
+            validation_result = self._validate_event_changes(event, new_start_date, new_end_date, selected_sub_events)
             if not validation_result['valid']:
                 return Response({'error': validation_result['message']}, status=status.HTTP_400_BAD_REQUEST)
             
@@ -276,16 +280,27 @@ class UpdateEventView(APIView):
             if new_start_date != event.start_date or new_end_date != event.end_date:
                 self._update_sub_events_dates(updated_event, new_start_date, new_end_date)
             
-            return Response({
+            # Update sub-events selection if provided
+            updated_sub_events = None
+            if selected_sub_events is not None:
+                updated_sub_events = self._update_sub_events_selection(updated_event, selected_sub_events, new_start_date, new_end_date)
+            
+            response_data = {
                 'message': 'Event updated successfully',
                 'data': EventSerializer(updated_event).data,
                 'warnings': validation_result.get('warnings', [])
-            })
+            }
+            
+            # Include sub-events in response if they were updated
+            if updated_sub_events is not None:
+                response_data['sub_events'] = SubEventSerializer(updated_sub_events, many=True).data
+            
+            return Response(response_data)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    def _validate_date_change(self, event, new_start_date, new_end_date):
-        """Validate if date changes are safe"""
+    def _validate_event_changes(self, event, new_start_date, new_end_date, selected_sub_events=None):
+        """Validate if event and sub-event changes are safe"""
         warnings = []
         
         # Check if tickets already generated
@@ -293,26 +308,64 @@ class UpdateEventView(APIView):
         if ticket_count > 0:
             warnings.append(f'{ticket_count} tickets already generated for this event')
         
-        # Check sub-events timing conflicts
-        sub_events = SubEvent.objects.filter(event=event)
-        conflicting_sub_events = []
-        
-        for sub_event in sub_events:
-            sub_start_date = sub_event.start_time.date()
-            sub_end_date = sub_event.end_time.date()
+        # Check sub-events timing conflicts (only if not updating sub-events)
+        if selected_sub_events is None:
+            sub_events = SubEvent.objects.filter(event=event)
+            conflicting_sub_events = []
             
-            if sub_start_date < new_start_date or sub_end_date > new_end_date:
-                conflicting_sub_events.append(sub_event.name)
+            for sub_event in sub_events:
+                sub_start_date = sub_event.start_time.date()
+                sub_end_date = sub_event.end_time.date()
+                
+                if sub_start_date < new_start_date or sub_end_date > new_end_date:
+                    conflicting_sub_events.append(sub_event.name)
+            
+            if conflicting_sub_events:
+                warnings.append(f'Sub-events outside new date range: {", ".join(conflicting_sub_events)}')
         
-        if conflicting_sub_events:
-            warnings.append(f'Sub-events outside new date range: {", ".join(conflicting_sub_events)}')
+        # Check staff assignments and tickets for sub-events being removed
+        if selected_sub_events is not None:
+            current_sub_events = set(SubEvent.objects.filter(event=event).values_list('name', flat=True))
+            selected_set = set(selected_sub_events)
+            
+            # Sub-events being removed
+            removed_sub_events = current_sub_events - selected_set
+            
+            if removed_sub_events:
+                # Check for tickets in removed sub-events
+                removed_tickets = Ticket.objects.filter(
+                    event=event,
+                    sub_event__name__in=removed_sub_events
+                ).count()
+                
+                if removed_tickets > 0:
+                    return {
+                        'valid': False,
+                        'message': f'Cannot remove sub-events with existing tickets. {removed_tickets} tickets found in: {", ".join(removed_sub_events)}'
+                    }
+                
+                # Check for staff assignments in removed sub-events
+                assigned_staff = StaffProfile.objects.filter(
+                    assigned_sub_events__event=event,
+                    assigned_sub_events__name__in=removed_sub_events
+                ).distinct().count()
+                
+                if assigned_staff > 0:
+                    warnings.append(f'{assigned_staff} staff members assigned to sub-events being removed: {", ".join(removed_sub_events)}')
+                
+                warnings.append(f'Sub-events will be removed: {", ".join(removed_sub_events)}')
+            
+            # Sub-events being added
+            added_sub_events = selected_set - current_sub_events
+            if added_sub_events:
+                warnings.append(f'New sub-events will be added: {", ".join(added_sub_events)}')
         
-        # Check staff assignments
+        # Check staff assignments (general)
         assigned_staff_count = StaffProfile.objects.filter(
             assigned_sub_events__event=event
         ).distinct().count()
         
-        if assigned_staff_count > 0:
+        if assigned_staff_count > 0 and selected_sub_events is None:
             warnings.append(f'{assigned_staff_count} staff members assigned to this event\'s sub-events')
         
         return {
@@ -338,6 +391,48 @@ class UpdateEventView(APIView):
                 sub_event.end_time = end_time
             
             sub_event.save()
+    
+    def _update_sub_events_selection(self, event, selected_sub_events, start_date, end_date):
+        """Update sub-events based on selection"""
+        from datetime import datetime, time
+        
+        # Get current sub-events
+        current_sub_events = SubEvent.objects.filter(event=event)
+        current_names = set(current_sub_events.values_list('name', flat=True))
+        selected_set = set(selected_sub_events)
+        
+        # Remove sub-events not in selection (already validated for tickets/staff)
+        removed_names = current_names - selected_set
+        if removed_names:
+            # Remove staff assignments first
+            removed_sub_events = current_sub_events.filter(name__in=removed_names)
+            for sub_event in removed_sub_events:
+                sub_event.assigned_staff.clear()
+            
+            # Delete removed sub-events
+            current_sub_events.filter(name__in=removed_names).delete()
+        
+        # Add new sub-events
+        added_names = selected_set - current_names
+        start_time = datetime.combine(start_date, time(9, 0))
+        end_time = datetime.combine(end_date, time(23, 59))
+        
+        for name in added_names:
+            SubEvent.objects.create(
+                event=event,
+                name=name,
+                description=f'{name} for {event.name}',
+                start_time=start_time,
+                end_time=end_time,
+                is_active=True
+            )
+        
+        # Return updated sub-events
+        return SubEvent.objects.filter(event=event).order_by('created_at')
+    
+    def _validate_date_change(self, event, new_start_date, new_end_date):
+        """Legacy method - kept for backward compatibility"""
+        return self._validate_event_changes(event, new_start_date, new_end_date)
 
 
 class EventListView(generics.ListAPIView):
