@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Sub-Events Management</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .btn { padding: 8px 16px; margin: 5px; border: none; border-radius: 3px; cursor: pointer; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-warning { background: #ffc107; color: black; }
+        input, textarea, select { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 3px; }
+        .form-group { margin: 10px 0; }
+        .master-item { padding: 10px; margin: 5px 0; border: 1px solid #eee; border-radius: 3px; }
+        .active { background: #d4edda; }
+        .inactive { background: #f8d7da; }
+        #response { margin: 10px 0; padding: 10px; border-radius: 3px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Master Sub-Events Management</h1>
+        
+        <!-- Login Section -->
+        <div class="section">
+            <h2>Login</h2>
+            <div class="form-group">
+                <input type="text" id="username" placeholder="Username" value="admin">
+                <input type="password" id="password" placeholder="Password" value="admin">
+                <button class="btn btn-primary" onclick="login()">Login</button>
+            </div>
+            <div id="loginStatus"></div>
+        </div>
+
+        <!-- Master Sub-Events List -->
+        <div class="section">
+            <h2>Master Sub-Events</h2>
+            <button class="btn btn-primary" onclick="loadMasterSubEvents()">Refresh List</button>
+            <div id="masterSubEventsList"></div>
+        </div>
+
+        <!-- Create New Master Sub-Event -->
+        <div class="section">
+            <h2>Create New Master Sub-Event</h2>
+            <div class="form-group">
+                <input type="text" id="newName" placeholder="Sub-Event Name" required>
+            </div>
+            <div class="form-group">
+                <textarea id="newDescription" placeholder="Description (optional)" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="newIsActive" checked> Active
+                </label>
+            </div>
+            <button class="btn btn-success" onclick="createMasterSubEvent()">Create</button>
+        </div>
+
+        <!-- Update Master Sub-Event -->
+        <div class="section">
+            <h2>Update Master Sub-Event</h2>
+            <div class="form-group">
+                <input type="number" id="updateId" placeholder="Master Sub-Event ID" required>
+                <button class="btn btn-warning" onclick="loadForUpdate()">Load</button>
+            </div>
+            <div class="form-group">
+                <input type="text" id="updateName" placeholder="Sub-Event Name">
+            </div>
+            <div class="form-group">
+                <textarea id="updateDescription" placeholder="Description" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="updateIsActive"> Active
+                </label>
+            </div>
+            <button class="btn btn-warning" onclick="updateMasterSubEvent()">Update</button>
+        </div>
+
+        <!-- Test Basic API Connection -->
+        <div class="section">
+            <h2>Test Basic Connection</h2>
+            <button class="btn btn-primary" onclick="testBasicConnection()">Test Server Connection</button>
+            <div id="connectionResult"></div>
+        </div>
+
+        <!-- Test Predefined Sub-Events API -->
+        <div class="section">
+            <h2>Test Predefined Sub-Events API</h2>
+            <button class="btn btn-primary" onclick="testPredefinedAPI()">Get Predefined Sub-Events</button>
+            <div id="predefinedResult"></div>
+        </div>
+
+        <div id="response"></div>
+    </div>
+
+    <script>
+        let authToken = '';
+        const baseURL = 'http://localhost:8000/api';
+
+        function showResponse(message, isError = false) {
+            const responseDiv = document.getElementById('response');
+            responseDiv.innerHTML = message;
+            responseDiv.className = isError ? 'error' : 'success';
+        }
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${baseURL}/login/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.access;
+                    document.getElementById('loginStatus').innerHTML = 
+                        `<span style="color: green;">Logged in as: ${data.user.username} (${data.user.role})</span>`;
+                    showResponse('Login successful!');
+                    loadMasterSubEvents();
+                } else {
+                    showResponse('Login failed: ' + JSON.stringify(data), true);
+                }
+            } catch (error) {
+                showResponse('Login error: ' + error.message, true);
+            }
+        }
+
+        async function loadMasterSubEvents() {
+            if (!authToken) {
+                showResponse('Please login first', true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseURL}/admin/master-sub-events/`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayMasterSubEvents(data);
+                    showResponse('Master sub-events loaded successfully!');
+                } else {
+                    showResponse('Failed to load: ' + JSON.stringify(data), true);
+                }
+            } catch (error) {
+                showResponse('Load error: ' + error.message, true);
+            }
+        }
+
+        function displayMasterSubEvents(data) {
+            const container = document.getElementById('masterSubEventsList');
+            
+            if (data.length === 0) {
+                container.innerHTML = '<p>No master sub-events found.</p>';
+                return;
+            }
+
+            let html = '<h3>Master Sub-Events:</h3>';
+            data.forEach(item => {
+                html += `
+                    <div class="master-item ${item.is_active ? 'active' : 'inactive'}">
+                        <strong>ID: ${item.id}</strong> - ${item.name}
+                        <br><small>Description: ${item.description || 'No description'}</small>
+                        <br><small>Status: ${item.is_active ? 'Active' : 'Inactive'}</small>
+                        <br><small>Usage: ${item.usage_count} events | Can Delete: ${item.can_delete ? 'Yes' : 'No'}</small>
+                        <br><small>Created: ${new Date(item.created_at).toLocaleString()}</small>
+                        <div style="margin-top: 5px;">
+                            <button class="btn btn-warning" onclick="loadForUpdate(${item.id})">Edit</button>
+                            <button class="btn btn-danger" onclick="deleteMasterSubEvent(${item.id})" 
+                                    ${!item.can_delete ? 'disabled title="Cannot delete - in use"' : ''}>
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        async function createMasterSubEvent() {
+            if (!authToken) {
+                showResponse('Please login first', true);
+                return;
+            }
+
+            const name = document.getElementById('newName').value.trim();
+            const description = document.getElementById('newDescription').value.trim();
+            const is_active = document.getElementById('newIsActive').checked;
+
+            if (!name) {
+                showResponse('Name is required', true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseURL}/admin/master-sub-events/create/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, description, is_active })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResponse(`Master sub-event "${data.name}" created successfully!`);
+                    // Clear form
+                    document.getElementById('newName').value = '';
+                    document.getElementById('newDescription').value = '';
+                    document.getElementById('newIsActive').checked = true;
+                    // Reload list
+                    loadMasterSubEvents();
+                } else {
+                    showResponse('Create failed: ' + JSON.stringify(data), true);
+                }
+            } catch (error) {
+                showResponse('Create error: ' + error.message, true);
+            }
+        }
+
+        async function loadForUpdate(id = null) {
+            if (!authToken) {
+                showResponse('Please login first', true);
+                return;
+            }
+
+            const targetId = id || document.getElementById('updateId').value;
+            if (!targetId) {
+                showResponse('Please provide an ID', true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseURL}/admin/master-sub-events/`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+                const item = data.find(item => item.id == targetId);
+                
+                if (item) {
+                    document.getElementById('updateId').value = item.id;
+                    document.getElementById('updateName').value = item.name;
+                    document.getElementById('updateDescription').value = item.description;
+                    document.getElementById('updateIsActive').checked = item.is_active;
+                    showResponse(`Loaded data for "${item.name}"`);
+                } else {
+                    showResponse('Item not found', true);
+                }
+            } catch (error) {
+                showResponse('Load error: ' + error.message, true);
+            }
+        }
+
+        async function updateMasterSubEvent() {
+            if (!authToken) {
+                showResponse('Please login first', true);
+                return;
+            }
+
+            const id = document.getElementById('updateId').value;
+            const name = document.getElementById('updateName').value.trim();
+            const description = document.getElementById('updateDescription').value.trim();
+            const is_active = document.getElementById('updateIsActive').checked;
+
+            if (!id || !name) {
+                showResponse('ID and Name are required', true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseURL}/admin/master-sub-events/${id}/`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, description, is_active })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResponse(`Master sub-event "${data.name}" updated successfully!`);
+                    loadMasterSubEvents();
+                } else {
+                    showResponse('Update failed: ' + JSON.stringify(data), true);
+                }
+            } catch (error) {
+                showResponse('Update error: ' + error.message, true);
+            }
+        }
+
+        async function deleteMasterSubEvent(id) {
+            if (!authToken) {
+                showResponse('Please login first', true);
+                return;
+            }
+
+            if (!confirm('Are you sure you want to delete this master sub-event?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseURL}/admin/master-sub-events/${id}/delete/`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResponse(data.message);
+                    loadMasterSubEvents();
+                } else {
+                    showResponse('Delete failed: ' + JSON.stringify(data), true);
+                }
+            } catch (error) {
+                showResponse('Delete error: ' + error.message, true);
+            }
+        }
+
+        async function testBasicConnection() {
+            try {
+                const response = await fetch(`${baseURL}/login/`, {
+                    method: 'OPTIONS'
+                });
+                
+                document.getElementById('connectionResult').innerHTML = 
+                    `<p>Server Status: ${response.status} - ${response.ok ? 'OK' : 'Error'}</p>
+                     <p>Server accessible at: ${baseURL}</p>`;
+                     
+                if (response.ok) {
+                    showResponse('Server connection successful!');
+                } else {
+                    showResponse(`Server returned status: ${response.status}`, true);
+                }
+            } catch (error) {
+                document.getElementById('connectionResult').innerHTML = 
+                    `<p style="color: red;">Connection failed: ${error.message}</p>`;
+                showResponse('Connection error: ' + error.message, true);
+            }
+        }
+
+        async function testPredefinedAPI() {
+            if (!authToken) {
+                showResponse('Please login first', true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseURL}/admin/predefined-sub-events/`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                const contentType = response.headers.get('content-type');
+                console.log('Content-Type:', contentType);
+                
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        document.getElementById('predefinedResult').innerHTML = 
+                            `<h4>Predefined Sub-Events (${data.predefined_sub_events.length}):</h4>
+                             <ul>${data.predefined_sub_events.map(name => `<li>${name}</li>`).join('')}</ul>`;
+                        showResponse('Predefined sub-events API working correctly!');
+                    } else {
+                        showResponse('API test failed: ' + JSON.stringify(data), true);
+                    }
+                } else {
+                    const text = await response.text();
+                    console.log('Response text:', text);
+                    showResponse(`API returned non-JSON response (${response.status}): ${text.substring(0, 200)}...`, true);
+                }
+            } catch (error) {
+                console.error('Full error:', error);
+                showResponse('API test error: ' + error.message, true);
+            }
+        }
+    </script>
+</body>
+</html>

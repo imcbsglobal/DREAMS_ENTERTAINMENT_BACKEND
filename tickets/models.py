@@ -5,6 +5,27 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 
+class SubEventMaster(models.Model):
+    """Master data for predefined sub-events"""
+    name = models.CharField(max_length=200, unique=True)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return self.name
+    
+    def can_delete(self):
+        """Check if this master sub-event can be safely deleted"""
+        return not SubEvent.objects.filter(name=self.name).exists()
+    
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Sub Event Master'
+        verbose_name_plural = 'Sub Event Masters'
+
+
 class Event(models.Model):
     name = models.CharField(max_length=200)
     code = models.CharField(max_length=10, unique=True, editable=False)
@@ -87,7 +108,16 @@ class SubEvent(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.code:
-            self.code = self.name[:3].upper().replace(' ', '')
+            # Generate base code from first 3 characters
+            base_code = self.name[:3].upper().replace(' ', '')
+            self.code = base_code
+            counter = 1
+            
+            # Keep trying until we find a unique code within the same event
+            while SubEvent.objects.filter(event=self.event, code=self.code).exclude(pk=self.pk).exists():
+                self.code = f"{base_code}{counter}"
+                counter += 1
+        
         super().save(*args, **kwargs)
 
     def __str__(self):

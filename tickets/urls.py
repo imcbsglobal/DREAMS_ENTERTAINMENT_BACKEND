@@ -4,6 +4,8 @@ from .views import (
     CreateStaffView, StaffListView, UpdateStaffView, DeleteStaffView, AssignEventsToStaffView, PredefinedSubEventsView, CreateEventView, UpdateEventView, CreateSubEventView,
     SubEventListView, CreateEntryTypeView, AdminEntryTypesView, ConfigureTicketView, EventListView, DeleteEventView,
     TicketsReportView, RevenueReportView, StaffSummaryReportView,
+    # Master Data views
+    SubEventMasterListView, SubEventMasterCreateView, SubEventMasterUpdateView, SubEventMasterDeleteView,
     # Staff views
     StaffEventsView, StaffSubEventsView, StaffEntryTypesView, GenerateTicketView, VerifyTicketView,
     # Auth views
@@ -33,6 +35,12 @@ urlpatterns = [
     path('admin/reports/tickets/', TicketsReportView.as_view(), name='admin-tickets-report'),
     path('admin/reports/revenue/', RevenueReportView.as_view(), name='admin-revenue-report'),
     path('admin/reports/staff-summary/', StaffSummaryReportView.as_view(), name='admin-staff-summary'),
+    
+    # Master Data endpoints
+    path('admin/master-sub-events/', SubEventMasterListView.as_view(), name='admin-master-sub-events-list'),
+    path('admin/master-sub-events/create/', SubEventMasterCreateView.as_view(), name='admin-master-sub-events-create'),
+    path('admin/master-sub-events/<int:id>/', SubEventMasterUpdateView.as_view(), name='admin-master-sub-events-update'),
+    path('admin/master-sub-events/<int:id>/delete/', SubEventMasterDeleteView.as_view(), name='admin-master-sub-events-delete'),
     
     # Staff endpoints
     path('staff/events/', StaffEventsView.as_view(), name='staff-events'),

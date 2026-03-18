@@ -7,11 +7,11 @@ from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
-from .models import Event, SubEvent, EntryType, StaffProfile, TicketCustomization, Ticket
+from .models import Event, SubEvent, EntryType, StaffProfile, TicketCustomization, Ticket, SubEventMaster
 from .serializers import (
     EventSerializer, SubEventSerializer, EntryTypeSerializer, StaffProfileSerializer,
     CreateStaffSerializer, TicketCustomizationSerializer, TicketSerializer,
-    GenerateTicketSerializer, TicketPrintSerializer
+    GenerateTicketSerializer, TicketPrintSerializer, SubEventMasterSerializer
 )
 from .permissions import IsAdmin, IsStaff, IsAdminOrStaff
 from .services import TicketService
@@ -297,23 +297,13 @@ class AssignEventsToStaffView(APIView):
 
 
 class PredefinedSubEventsView(APIView):
-    """Admin: Get predefined sub-events list"""
+    """Admin: Get predefined sub-events list from database"""
     permission_classes = [IsAdmin]
     
     def get(self, request):
-        predefined_sub_events = [
-            'ENTRY TICKET',
-            'Giant wheel',
-            'Break dance',
-            'Colombus',
-            'Well of death',
-            'Ranger',
-            'Dragon train',
-            'Bouncy',
-            'Toy car',
-            'Toy helicopter',
-            'Toy Boat'
-        ]
+        # Fetch active sub-events from master data
+        master_sub_events = SubEventMaster.objects.filter(is_active=True).order_by('name')
+        predefined_sub_events = [item.name for item in master_sub_events]
         
         return Response({
             'predefined_sub_events': predefined_sub_events
@@ -763,6 +753,58 @@ class DeleteEventView(APIView):
                 'entry_types': entry_type_count,
                 'tickets': ticket_count
             }
+        })
+
+
+# ==================== MASTER DATA VIEWS ====================
+
+class SubEventMasterListView(generics.ListAPIView):
+    """Admin: List all master sub-events"""
+    permission_classes = [IsAdmin]
+    serializer_class = SubEventMasterSerializer
+    queryset = SubEventMaster.objects.all()
+
+
+class SubEventMasterCreateView(generics.CreateAPIView):
+    """Admin: Create new master sub-event"""
+    permission_classes = [IsAdmin]
+    serializer_class = SubEventMasterSerializer
+    queryset = SubEventMaster.objects.all()
+
+
+class SubEventMasterUpdateView(generics.UpdateAPIView):
+    """Admin: Update master sub-event"""
+    permission_classes = [IsAdmin]
+    serializer_class = SubEventMasterSerializer
+    queryset = SubEventMaster.objects.all()
+    lookup_field = 'id'
+
+
+class SubEventMasterDeleteView(APIView):
+    """Admin: Delete master sub-event with validation"""
+    permission_classes = [IsAdmin]
+    
+    def delete(self, request, id):
+        try:
+            master_sub_event = SubEventMaster.objects.get(id=id)
+        except SubEventMaster.DoesNotExist:
+            return Response({'error': 'Master sub-event not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if it can be safely deleted
+        if not master_sub_event.can_delete():
+            usage_count = SubEvent.objects.filter(name=master_sub_event.name).count()
+            return Response({
+                'error': 'Cannot delete master sub-event',
+                'reason': f'This sub-event is currently used in {usage_count} event(s)',
+                'suggestion': 'Deactivate instead of deleting, or remove from all events first'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Safe to delete
+        name = master_sub_event.name
+        master_sub_event.delete()
+        
+        return Response({
+            'message': f'Master sub-event "{name}" deleted successfully'
         })
 
 

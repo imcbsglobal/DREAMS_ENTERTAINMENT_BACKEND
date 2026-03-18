@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Event, SubEvent, EntryType, StaffProfile, TicketCustomization, Ticket
+from .models import Event, SubEvent, EntryType, StaffProfile, TicketCustomization, Ticket, SubEventMaster
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -193,3 +193,21 @@ class TicketPrintSerializer(serializers.Serializer):
     footer_text = serializers.CharField()
     created_at = serializers.DateTimeField()
     sequence_number = serializers.IntegerField()
+
+
+class SubEventMasterSerializer(serializers.ModelSerializer):
+    """Serializer for SubEventMaster model"""
+    can_delete = serializers.SerializerMethodField()
+    usage_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = SubEventMaster
+        fields = ['id', 'name', 'description', 'is_active', 'created_at', 'updated_at', 'can_delete', 'usage_count']
+        read_only_fields = ['created_at', 'updated_at', 'can_delete', 'usage_count']
+    
+    def get_can_delete(self, obj):
+        return obj.can_delete()
+    
+    def get_usage_count(self, obj):
+        """Count how many times this master sub-event is used in actual events"""
+        return SubEvent.objects.filter(name=obj.name).count()

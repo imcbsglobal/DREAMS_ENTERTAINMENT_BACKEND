@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Event, SubEvent, EntryType, StaffProfile, TicketCustomization, Ticket
+from .models import Event, SubEvent, EntryType, StaffProfile, TicketCustomization, Ticket, SubEventMaster
 
 
 @admin.register(Event)
@@ -44,3 +44,11 @@ class TicketAdmin(admin.ModelAdmin):
     list_filter = ['event', 'sub_event', 'entry_type', 'created_at']
     search_fields = ['ticket_id', 'staff__username']
     readonly_fields = ['ticket_id', 'created_at']
+
+
+@admin.register(SubEventMaster)
+class SubEventMasterAdmin(admin.ModelAdmin):
+    list_display = ['name', 'description', 'is_active', 'created_at', 'updated_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'description']
+    readonly_fields = ['created_at', 'updated_at']
