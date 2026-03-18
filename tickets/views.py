@@ -417,6 +417,16 @@ class CreateEntryTypeView(generics.CreateAPIView):
     serializer_class = EntryTypeSerializer
 
 
+class AdminEntryTypesView(generics.ListAPIView):
+    """Admin: List entry types for a sub-event (including inactive)"""
+    permission_classes = [IsAdmin]
+    serializer_class = EntryTypeSerializer
+
+    def get_queryset(self):
+        sub_event_id = self.kwargs.get('sub_event_id')
+        return EntryType.objects.filter(sub_event_id=sub_event_id)
+
+
 class ConfigureTicketView(APIView):
     """Admin: Configure ticket customization"""
     permission_classes = [IsAdmin]
