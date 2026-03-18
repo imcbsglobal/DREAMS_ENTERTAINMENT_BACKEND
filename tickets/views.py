@@ -55,11 +55,212 @@ class CreateStaffView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class StaffListView(generics.ListAPIView):
-    """Admin: List all staff"""
+class UpdateStaffView(APIView):
+    """Admin: Update staff with conditional editing based on ticket generation"""
     permission_classes = [IsAdmin]
-    queryset = StaffProfile.objects.all()
+    
+    @transaction.atomic
+    def put(self, request, staff_id):
+        try:
+            staff_profile = StaffProfile.objects.get(id=staff_id)
+            user = staff_profile.user
+            
+            # Check if staff has generated any tickets
+            tickets_count = Ticket.objects.filter(staff=user).count()
+            has_generated_tickets = tickets_count > 0
+            
+            if has_generated_tickets:
+                # RESTRICTED EDITING - Only safe fields
+                return self._handle_restricted_edit(staff_profile, request.data, tickets_count)
+            else:
+                # FULL EDITING - All fields allowed
+                return self._handle_full_edit(staff_profile, request.data)
+                
+        except StaffProfile.DoesNotExist:
+            return Response({'error': 'Staff not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    def _handle_restricted_edit(self, staff_profile, data, tickets_count):
+        """Handle editing for staff who have generated tickets"""
+        
+        # Define allowed fields for staff with tickets
+        ALLOWED_FIELDS = [
+            'first_name', 'last_name', 'email',  # User personal info
+            'assigned_sub_events',                # Sub-event assignments
+            'password'                           # Allow password changes
+        ]
+        
+        # Check for restricted fields
+        restricted_fields = []
+        for field in data.keys():
+            if field not in ALLOWED_FIELDS:
+                restricted_fields.append(field)
+        
+        if restricted_fields:
+            return Response({
+                'error': 'Cannot edit these fields for staff with existing tickets',
+                'details': {
+                    'tickets_generated': tickets_count,
+                    'restricted_fields': restricted_fields,
+                    'allowed_fields': ALLOWED_FIELDS,
+                    'reason': 'Staff has generated tickets - only safe fields can be edited'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update only allowed fields
+        user = staff_profile.user
+        updated_fields = []
+        
+        # Update User fields
+        if 'first_name' in data:
+            user.first_name = data['first_name']
+            updated_fields.append('first_name')
+        if 'last_name' in data:
+            user.last_name = data['last_name']
+            updated_fields.append('last_name')
+        if 'email' in data:
+            user.email = data['email']
+            updated_fields.append('email')
+        if 'password' in data:
+            user.set_password(data['password'])
+            updated_fields.append('password')
+        
+        user.save()
+        
+        # Update sub-event assignments
+        if 'assigned_sub_events' in data:
+            staff_profile.assigned_sub_events.set(data['assigned_sub_events'])
+            updated_fields.append('assigned_sub_events')
+        
+        return Response({
+            'message': 'Staff updated successfully (restricted mode)',
+            'note': f'Limited editing due to {tickets_count} generated tickets',
+            'updated_fields': updated_fields,
+            'data': StaffProfileSerializer(staff_profile).data
+        })
+    
+    def _handle_full_edit(self, staff_profile, data):
+        """Handle full editing for new staff with no tickets"""
+        
+        user = staff_profile.user
+        
+        # Validate all fields
+        validation_errors = self._validate_full_edit(staff_profile, data)
+        if validation_errors:
+            return Response({'errors': validation_errors}, status=status.HTTP_400_BAD_REQUEST)
+        
+        updated_fields = []
+        
+        # Update User fields
+        user_fields = ['username', 'first_name', 'last_name', 'email', 'password']
+        for field in user_fields:
+            if field in data:
+                if field == 'password':
+                    user.set_password(data[field])
+                else:
+                    setattr(user, field, data[field])
+                updated_fields.append(field)
+        user.save()
+        
+        # Update StaffProfile fields
+        profile_fields = ['role', 'range_start', 'range_end']
+        for field in profile_fields:
+            if field in data:
+                setattr(staff_profile, field, data[field])
+                updated_fields.append(field)
+        
+        # Update sub-event assignments
+        if 'assigned_sub_events' in data:
+            staff_profile.assigned_sub_events.set(data['assigned_sub_events'])
+            updated_fields.append('assigned_sub_events')
+        
+        staff_profile.save()
+        
+        return Response({
+            'message': 'Staff updated successfully (full edit mode)',
+            'note': 'All fields editable - no tickets generated yet',
+            'updated_fields': updated_fields,
+            'data': StaffProfileSerializer(staff_profile).data
+        })
+    
+    def _validate_full_edit(self, staff_profile, data):
+        """Validate full edit data"""
+        errors = {}
+        
+        # Username validation
+        if 'username' in data:
+            if User.objects.filter(username=data['username']).exclude(id=staff_profile.user.id).exists():
+                errors['username'] = 'Username already exists'
+        
+        # Range validation
+        if 'range_start' in data and 'range_end' in data:
+            if data['range_end'] <= data['range_start']:
+                errors['range'] = 'range_end must be greater than range_start'
+        elif 'range_start' in data:
+            if data['range_start'] >= staff_profile.range_end:
+                errors['range_start'] = 'range_start must be less than current range_end'
+        elif 'range_end' in data:
+            if data['range_end'] <= staff_profile.range_start:
+                errors['range_end'] = 'range_end must be greater than current range_start'
+        
+        # Role validation
+        if 'role' in data and data['role'] not in ['admin', 'staff']:
+            errors['role'] = 'Role must be admin or staff'
+        
+        # Password validation
+        if 'password' in data and len(data['password']) < 6:
+            errors['password'] = 'Password must be at least 6 characters long'
+        
+        return errors
+
+
+class DeleteStaffView(APIView):
+    """Admin: Delete staff (soft delete using User.is_active)"""
+    permission_classes = [IsAdmin]
+    
+    def delete(self, request, staff_id):
+        try:
+            staff_profile = StaffProfile.objects.get(id=staff_id)
+            user = staff_profile.user
+            
+            # Get stats before deletion
+            tickets_count = Ticket.objects.filter(staff=user).count()
+            total_revenue = Ticket.objects.filter(staff=user).aggregate(
+                total=Sum('price')
+            )['total'] or 0
+            
+            # Store info for response
+            username = user.username
+            staff_code = staff_profile.get_staff_code()
+            
+            # Soft delete - deactivate user (preserves all tickets and reports)
+            user.is_active = False
+            user.save()
+            
+            # Clear sub-event assignments
+            staff_profile.assigned_sub_events.clear()
+            
+            return Response({
+                'message': f'Staff "{username}" deleted successfully',
+                'preserved_data': {
+                    'tickets_preserved': tickets_count,
+                    'revenue_preserved': str(total_revenue),
+                    'staff_code': staff_code,
+                    'note': 'All tickets and reports remain intact. Staff cannot login but data is preserved.'
+                }
+            })
+            
+        except StaffProfile.DoesNotExist:
+            return Response({'error': 'Staff not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class StaffListView(generics.ListAPIView):
+    """Admin: List all active staff"""
+    permission_classes = [IsAdmin]
     serializer_class = StaffProfileSerializer
+    
+    def get_queryset(self):
+        # Only show staff with active users (excludes soft-deleted staff)
+        return StaffProfile.objects.filter(user__is_active=True)
 
 
 class AssignEventsToStaffView(APIView):

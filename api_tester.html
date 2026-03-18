@@ -299,6 +299,74 @@
                 <div id="staff-list-response" class="response" style="display:none;"></div>
             </div>
 
+            <!-- Update Staff -->
+            <div class="section">
+                <h2>6.1 Update Staff (Conditional Editing)</h2>
+                <div class="info" style="background: #d1ecf1; color: #0c5460;">
+                    <strong>🔄 Smart Editing:</strong> New staff (no tickets) = Full edit. Experienced staff (has tickets) = Restricted edit.
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <input type="number" id="update-staff-id" placeholder="Staff ID to Update" value="" style="flex: 1;">
+                    <button onclick="loadStaffForUpdate()" style="background: #17a2b8; white-space: nowrap;">📥 Load Staff</button>
+                </div>
+                
+                <!-- Current Staff Info -->
+                <div id="current-staff-info" class="info" style="background: #fff3cd; color: #856404; display: none; margin: 10px 0;">
+                    <strong>👤 Current Staff:</strong> <span id="current-staff-details"></span><br>
+                    <strong>🎫 Tickets Generated:</strong> <span id="current-staff-tickets"></span><br>
+                    <strong>📝 Edit Mode:</strong> <span id="current-staff-edit-mode"></span>
+                </div>
+                
+                <!-- Update Fields -->
+                <input type="text" id="update-staff-username" placeholder="Username (only for new staff)" value="">
+                <input type="password" id="update-staff-password" placeholder="New Password" value="">
+                <input type="text" id="update-staff-firstname" placeholder="First Name" value="">
+                <input type="text" id="update-staff-lastname" placeholder="Last Name" value="">
+                <input type="email" id="update-staff-email" placeholder="Email" value="">
+                <select id="update-staff-role">
+                    <option value="">Keep Current Role</option>
+                    <option value="admin">Admin</option>
+                    <option value="staff">Staff</option>
+                </select>
+                <input type="number" id="update-staff-range-start" placeholder="Range Start (only for new staff)" value="">
+                <input type="number" id="update-staff-range-end" placeholder="Range End (only for new staff)" value="">
+                
+                <!-- Sub-event assignments -->
+                <div style="margin: 10px 0;">
+                    <label style="font-weight: bold; display: block; margin-bottom: 5px;">Update Sub-Event Assignments:</label>
+                    <button onclick="loadSubEventsForStaffUpdate()" style="background: #28a745; font-size: 12px; padding: 5px 10px;">Load Sub-Events</button>
+                    <select id="update-staff-subevents" multiple size="4" style="height: 100px; margin-top: 5px;">
+                        <option value="">Click 'Load Sub-Events' button first</option>
+                    </select>
+                    <small style="color: #666; display: block;">Hold Ctrl/Cmd to select multiple</small>
+                </div>
+                
+                <button onclick="updateStaff()" style="background: #ffc107; color: #000; font-size: 16px; padding: 12px 24px; margin-top: 15px;">🔄 Update Staff</button>
+                <div id="update-staff-response" class="response" style="display:none;"></div>
+            </div>
+
+            <!-- Delete Staff -->
+            <div class="section">
+                <h2>6.2 Delete Staff (Soft Delete)</h2>
+                <div class="info" style="background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;">
+                    <strong>🗑️ Safe Deletion:</strong> Staff will be deactivated (cannot login) but all tickets and reports are preserved.
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <input type="number" id="delete-staff-id" placeholder="Staff ID to Delete" value="" style="flex: 1;">
+                    <button onclick="loadStaffForDeletion()" style="background: #17a2b8; white-space: nowrap;">📥 Load Staff Info</button>
+                </div>
+                
+                <!-- Staff Deletion Info -->
+                <div id="delete-staff-info" class="info" style="background: #fff3cd; color: #856404; display: none; margin: 10px 0;">
+                    <strong>👤 Staff to Delete:</strong> <span id="delete-staff-details"></span><br>
+                    <strong>🎫 Tickets to Preserve:</strong> <span id="delete-staff-tickets"></span><br>
+                    <strong>💰 Revenue to Preserve:</strong> <span id="delete-staff-revenue"></span>
+                </div>
+                
+                <button onclick="deleteStaff()" style="background: #dc3545; font-weight: bold; font-size: 16px; padding: 12px 24px;">🗑️ Delete Staff (Soft Delete)</button>
+                <div id="delete-staff-response" class="response" style="display:none;"></div>
+            </div>
+
             <!-- Assign Events to Staff -->
             <div class="section">
                 <h2>6.5 Assign Sub-Events to Staff</h2>
@@ -430,7 +498,7 @@
     </div>
 
     <script>
-        const API_BASE = 'https://de.imcbs.com/api';
+        const API_BASE = 'http://localhost:8000/api';
         let accessToken = '';
         let userRole = '';
 
@@ -769,6 +837,226 @@
         async function listStaff() {
             await apiCall('/admin/staff-list/', 'GET', null, 'staff-list-response');
             await loadStaffDropdown();
+        }
+
+        // NEW: Load Staff for Update
+        async function loadStaffForUpdate() {
+            const staffId = document.getElementById('update-staff-id').value;
+            if (!staffId) {
+                alert('Please enter Staff ID first');
+                return;
+            }
+            
+            try {
+                // Fetch staff list to find the staff
+                const staffResponse = await fetch(`${API_BASE}/admin/staff-list/`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const staffList = await staffResponse.json();
+                const staff = staffList.find(s => s.id == staffId);
+                
+                if (!staff) {
+                    alert(`Staff with ID ${staffId} not found`);
+                    return;
+                }
+                
+                // Get tickets count for this staff
+                const ticketsResponse = await fetch(`${API_BASE}/admin/reports/staff-summary/?staff_id=${staffId}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const summary = await ticketsResponse.json();
+                const staffSummary = summary.staff_summary[0];
+                const ticketsGenerated = staffSummary ? staffSummary.tickets_generated : 0;
+                
+                // Populate staff fields
+                document.getElementById('update-staff-username').value = staff.user.username;
+                document.getElementById('update-staff-firstname').value = staff.user.first_name || '';
+                document.getElementById('update-staff-lastname').value = staff.user.last_name || '';
+                document.getElementById('update-staff-email').value = staff.user.email || '';
+                document.getElementById('update-staff-role').value = staff.role;
+                document.getElementById('update-staff-range-start').value = staff.range_start;
+                document.getElementById('update-staff-range-end').value = staff.range_end;
+                
+                // Show current staff info
+                const editMode = ticketsGenerated > 0 ? 'RESTRICTED (has generated tickets)' : 'FULL (new staff)';
+                document.getElementById('current-staff-details').textContent = 
+                    `${staff.user.username} (${staff.staff_code}) - ${staff.role}`;
+                document.getElementById('current-staff-tickets').textContent = ticketsGenerated;
+                document.getElementById('current-staff-edit-mode').textContent = editMode;
+                document.getElementById('current-staff-info').style.display = 'block';
+                
+                // Load current sub-event assignments
+                await loadSubEventsForStaffUpdate();
+                const subEventSelect = document.getElementById('update-staff-subevents');
+                Array.from(subEventSelect.options).forEach(option => {
+                    option.selected = staff.assigned_sub_events.includes(parseInt(option.value));
+                });
+                
+                showResponse('update-staff-response', {
+                    message: `✅ Loaded Staff: ${staff.user.username}`,
+                    edit_mode: editMode,
+                    tickets_generated: ticketsGenerated,
+                    staff_details: staff
+                }, false);
+                
+            } catch (error) {
+                showResponse('update-staff-response', { error: 'Error loading staff: ' + error.message }, true);
+            }
+        }
+
+        // NEW: Load Sub-Events for Staff Update
+        async function loadSubEventsForStaffUpdate() {
+            if (!accessToken) return;
+            try {
+                const response = await fetch(`${API_BASE}/admin/sub-events/0/`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const subEvents = await response.json();
+                const select = document.getElementById('update-staff-subevents');
+                select.innerHTML = '';
+                subEvents.forEach(se => {
+                    select.innerHTML += `<option value="${se.id}">${se.event_name} - ${se.name}</option>`;
+                });
+            } catch (error) {
+                console.error('Error loading sub-events:', error);
+            }
+        }
+
+        // NEW: Update Staff
+        async function updateStaff() {
+            const staffId = document.getElementById('update-staff-id').value;
+            if (!staffId) {
+                showResponse('update-staff-response', { error: 'Please enter Staff ID to update' }, true);
+                return;
+            }
+            
+            const body = {};
+            
+            // Add fields that have values
+            const username = document.getElementById('update-staff-username').value;
+            if (username) body.username = username;
+            
+            const password = document.getElementById('update-staff-password').value;
+            if (password) body.password = password;
+            
+            const firstName = document.getElementById('update-staff-firstname').value;
+            if (firstName) body.first_name = firstName;
+            
+            const lastName = document.getElementById('update-staff-lastname').value;
+            if (lastName) body.last_name = lastName;
+            
+            const email = document.getElementById('update-staff-email').value;
+            if (email) body.email = email;
+            
+            const role = document.getElementById('update-staff-role').value;
+            if (role) body.role = role;
+            
+            const rangeStart = document.getElementById('update-staff-range-start').value;
+            if (rangeStart) body.range_start = parseInt(rangeStart);
+            
+            const rangeEnd = document.getElementById('update-staff-range-end').value;
+            if (rangeEnd) body.range_end = parseInt(rangeEnd);
+            
+            // Sub-event assignments
+            const subEventSelect = document.getElementById('update-staff-subevents');
+            const selectedSubEvents = Array.from(subEventSelect.selectedOptions).map(opt => parseInt(opt.value));
+            if (selectedSubEvents.length > 0) {
+                body.assigned_sub_events = selectedSubEvents;
+            }
+            
+            if (Object.keys(body).length === 0) {
+                showResponse('update-staff-response', { error: 'Please fill at least one field to update' }, true);
+                return;
+            }
+            
+            console.log('Updating staff with data:', body);
+            await apiCall(`/admin/update-staff/${staffId}/`, 'PUT', body, 'update-staff-response');
+        }
+
+        // NEW: Load Staff for Deletion
+        async function loadStaffForDeletion() {
+            const staffId = document.getElementById('delete-staff-id').value;
+            if (!staffId) {
+                alert('Please enter Staff ID first');
+                return;
+            }
+            
+            try {
+                // Fetch staff details
+                const staffResponse = await fetch(`${API_BASE}/admin/staff-list/`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const staffList = await staffResponse.json();
+                const staff = staffList.find(s => s.id == staffId);
+                
+                if (!staff) {
+                    alert(`Staff with ID ${staffId} not found`);
+                    return;
+                }
+                
+                // Get staff summary for tickets and revenue info
+                const summaryResponse = await fetch(`${API_BASE}/admin/reports/staff-summary/?staff_id=${staffId}`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const summary = await summaryResponse.json();
+                const staffSummary = summary.staff_summary[0];
+                
+                const ticketsGenerated = staffSummary ? staffSummary.tickets_generated : 0;
+                const totalRevenue = staffSummary ? staffSummary.total_revenue : '0.00';
+                
+                // Show deletion info
+                document.getElementById('delete-staff-details').textContent = 
+                    `${staff.user.username} (${staff.staff_code}) - ${staff.role}`;
+                document.getElementById('delete-staff-tickets').textContent = ticketsGenerated;
+                document.getElementById('delete-staff-revenue').textContent = `$${totalRevenue}`;
+                document.getElementById('delete-staff-info').style.display = 'block';
+                
+                showResponse('delete-staff-response', {
+                    message: `✅ Loaded Staff for Deletion: ${staff.user.username}`,
+                    tickets_to_preserve: ticketsGenerated,
+                    revenue_to_preserve: totalRevenue,
+                    note: 'Staff will be deactivated but all data preserved'
+                }, false);
+                
+            } catch (error) {
+                showResponse('delete-staff-response', { error: 'Error loading staff: ' + error.message }, true);
+            }
+        }
+
+        // NEW: Delete Staff (Soft Delete)
+        async function deleteStaff() {
+            const staffId = document.getElementById('delete-staff-id').value;
+            if (!staffId) {
+                showResponse('delete-staff-response', { error: 'Please enter Staff ID to delete' }, true);
+                return;
+            }
+            
+            // Get staff details for confirmation
+            const staffDetails = document.getElementById('delete-staff-details').textContent;
+            const ticketsCount = document.getElementById('delete-staff-tickets').textContent;
+            
+            if (!staffDetails) {
+                alert('Please load staff information first using the "Load Staff Info" button');
+                return;
+            }
+            
+            // Confirmation dialog
+            const confirmDelete = confirm(
+                `⚠️ Are you sure you want to delete this staff member?\n\n` +
+                `Staff: ${staffDetails}\n` +
+                `Tickets to preserve: ${ticketsCount}\n\n` +
+                `This will:\n` +
+                `✅ Deactivate the staff (cannot login)\n` +
+                `✅ Preserve all tickets and reports\n` +
+                `✅ Clear sub-event assignments\n\n` +
+                `Click OK to proceed with soft deletion.`
+            );
+            
+            if (!confirmDelete) {
+                return;
+            }
+            
+            await apiCall(`/admin/delete-staff/${staffId}/`, 'DELETE', null, 'delete-staff-response');
         }
 
         async function loadStaffDropdown() {

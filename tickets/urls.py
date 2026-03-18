@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     # Admin views
-    CreateStaffView, StaffListView, AssignEventsToStaffView, PredefinedSubEventsView, CreateEventView, UpdateEventView, CreateSubEventView,
+    CreateStaffView, StaffListView, UpdateStaffView, DeleteStaffView, AssignEventsToStaffView, PredefinedSubEventsView, CreateEventView, UpdateEventView, CreateSubEventView,
     SubEventListView, CreateEntryTypeView, ConfigureTicketView, EventListView, DeleteEventView,
     TicketsReportView, RevenueReportView, StaffSummaryReportView,
     # Staff views
@@ -18,6 +18,8 @@ urlpatterns = [
     path('admin/predefined-sub-events/', PredefinedSubEventsView.as_view(), name='admin-predefined-sub-events'),
     path('admin/create-staff/', CreateStaffView.as_view(), name='admin-create-staff'),
     path('admin/staff-list/', StaffListView.as_view(), name='admin-staff-list'),
+    path('admin/update-staff/<int:staff_id>/', UpdateStaffView.as_view(), name='admin-update-staff'),
+    path('admin/delete-staff/<int:staff_id>/', DeleteStaffView.as_view(), name='admin-delete-staff'),
     path('admin/assign-events/', AssignEventsToStaffView.as_view(), name='admin-assign-sub-events'),
     path('admin/create-event/', CreateEventView.as_view(), name='admin-create-event'),
     path('admin/update-event/<int:event_id>/', UpdateEventView.as_view(), name='admin-update-event'),

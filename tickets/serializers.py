@@ -100,6 +100,32 @@ class TicketSerializer(serializers.ModelSerializer):
         read_only_fields = ['ticket_id', 'group_id', 'quantity_in_group', 'sequence_number', 'created_at']
 
 
+class UpdateStaffSerializer(serializers.Serializer):
+    # User fields
+    username = serializers.CharField(max_length=150, required=False)
+    first_name = serializers.CharField(max_length=150, required=False)
+    last_name = serializers.CharField(max_length=150, required=False)
+    email = serializers.EmailField(required=False)
+    password = serializers.CharField(write_only=True, min_length=6, required=False)
+    
+    # StaffProfile fields
+    role = serializers.ChoiceField(choices=['admin', 'staff'], required=False)
+    range_start = serializers.IntegerField(min_value=1, required=False)
+    range_end = serializers.IntegerField(min_value=1, required=False)
+    assigned_sub_events = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False
+    )
+    
+    def validate(self, data):
+        # Basic validation for range fields
+        if 'range_start' in data and 'range_end' in data:
+            if data['range_end'] <= data['range_start']:
+                raise serializers.ValidationError("range_end must be greater than range_start")
+        
+        return data
+
+
 class GenerateTicketSerializer(serializers.Serializer):
     event_id = serializers.IntegerField()
     sub_event_id = serializers.IntegerField()
