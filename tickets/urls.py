@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     # Admin views
     CreateStaffView, StaffListView, UpdateStaffView, DeleteStaffView, AssignEventsToStaffView, PredefinedSubEventsView, CreateEventView, UpdateEventView, CreateSubEventView,
-    SubEventListView, CreateEntryTypeView, AdminEntryTypesView, ConfigureTicketView, EventListView, DeleteEventView,
+    SubEventListView, CreateEntryTypeView, AdminEntryTypesView, EntryTypeDetailView, UpdateEntryTypeView, DeleteEntryTypeView, ConfigureTicketView, EventListView, DeleteEventView,
     TicketsReportView, RevenueReportView, StaffSummaryReportView,
     # Master Data views
     SubEventMasterListView, SubEventMasterCreateView, SubEventMasterUpdateView, SubEventMasterDeleteView,
@@ -30,6 +30,9 @@ urlpatterns = [
     path('admin/sub-events/<int:event_id>/', SubEventListView.as_view(), name='admin-sub-event-list'),
     path('admin/create-entry-type/', CreateEntryTypeView.as_view(), name='admin-create-entry-type'),
     path('admin/entry-types/<int:sub_event_id>/', AdminEntryTypesView.as_view(), name='admin-entry-types'),
+    path('admin/entry-type/<int:id>/', EntryTypeDetailView.as_view(), name='admin-entry-type-detail'),
+    path('admin/entry-type/<int:entry_type_id>/update/', UpdateEntryTypeView.as_view(), name='admin-update-entry-type'),
+    path('admin/entry-type/<int:entry_type_id>/delete/', DeleteEntryTypeView.as_view(), name='admin-delete-entry-type'),
     path('admin/configure-ticket/', ConfigureTicketView.as_view(), name='admin-configure-ticket'),
     path('admin/event-list/', EventListView.as_view(), name='admin-event-list'),
     path('admin/reports/tickets/', TicketsReportView.as_view(), name='admin-tickets-report'),

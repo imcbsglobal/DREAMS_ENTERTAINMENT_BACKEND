@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entry Type Management Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .form-group { margin: 10px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 3px; }
+        select { width: calc(70% - 10px); }
+        button[onclick*="load"] { width: calc(30% - 10px); background: #28a745; }
+        button[onclick*="load"]:hover { background: #218838; }
+        button { background: #007cba; color: white; padding: 10px 15px; border: none; border-radius: 3px; cursor: pointer; margin: 5px; }
+        button:hover { background: #005a87; }
+        .delete-btn { background: #dc3545; }
+        .delete-btn:hover { background: #c82333; }
+        .response { margin: 10px 0; padding: 10px; border-radius: 3px; white-space: pre-wrap; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Entry Type Management Test</h1>
+        
+        <!-- Login Section -->
+        <div class="section">
+            <h2>1. Login (Admin)</h2>
+            <div class="form-group">
+                <label>Username:</label>
+                <input type="text" id="username" value="admin" placeholder="Enter admin username">
+            </div>
+            <div class="form-group">
+                <label>Password:</label>
+                <input type="password" id="password" value="admin123" placeholder="Enter admin password">
+            </div>
+            <button onclick="login()">Login</button>
+            <div id="loginResponse" class="response"></div>
+        </div>
+
+        <!-- Get Entry Type Details -->
+        <div class="section">
+            <h2>2. Get Entry Type Details</h2>
+            <div class="form-group">
+                <label>Entry Type ID:</label>
+                <select id="detailEntryTypeId">
+                    <option value="">Select Entry Type ID...</option>
+                </select>
+                <button type="button" onclick="loadEntryTypeIds()" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">🔄 Load IDs</button>
+            </div>
+            <button onclick="getEntryTypeDetails()">Get Details</button>
+            <div id="detailResponse" class="response"></div>
+        </div>
+
+        <!-- Update Entry Type -->
+        <div class="section">
+            <h2>3. Update Entry Type</h2>
+            <div class="form-group">
+                <label>Entry Type ID:</label>
+                <select id="updateEntryTypeId">
+                    <option value="">Select Entry Type ID...</option>
+                </select>
+                <button type="button" onclick="loadEntryTypeIds()" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">🔄 Load IDs</button>
+            </div>
+            <div class="form-group">
+                <label>Name:</label>
+                <input type="text" id="updateName" placeholder="New name (leave empty to keep current)">
+            </div>
+            <div class="form-group">
+                <label>Price:</label>
+                <input type="number" id="updatePrice" step="0.01" placeholder="New price (leave empty to keep current)">
+            </div>
+            <div class="form-group">
+                <label>Description:</label>
+                <textarea id="updateDescription" placeholder="New description (leave empty to keep current)"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Active:</label>
+                <select id="updateIsActive">
+                    <option value="">Keep current</option>
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                </select>
+            </div>
+            <button onclick="updateEntryType()">Update Entry Type</button>
+            <div id="updateResponse" class="response"></div>
+        </div>
+
+        <!-- Delete Entry Type -->
+        <div class="section">
+            <h2>4. Delete Entry Type</h2>
+            <div class="form-group">
+                <label>Entry Type ID:</label>
+                <select id="deleteEntryTypeId">
+                    <option value="">Select Entry Type ID...</option>
+                </select>
+                <button type="button" onclick="loadEntryTypeIds()" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">🔄 Load IDs</button>
+            </div>
+            <button class="delete-btn" onclick="deleteEntryType()">Delete Entry Type</button>
+            <div id="deleteResponse" class="response"></div>
+        </div>
+
+        <!-- List Entry Types -->
+        <div class="section">
+            <h2>5. List Entry Types (for Sub-Event)</h2>
+            <div class="form-group">
+                <label>Sub-Event ID:</label>
+                <select id="listSubEventId">
+                    <option value="">Select Sub-Event ID...</option>
+                </select>
+                <button type="button" onclick="loadSubEventIds()" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">🔄 Load Sub-Event IDs</button>
+            </div>
+            <button onclick="listEntryTypes()">List Entry Types</button>
+            <div id="listResponse" class="response"></div>
+        </div>
+
+        <!-- List All Entry Types -->
+        <div class="section">
+            <h2>6. List All Entry Types (All Sub-Events)</h2>
+            <p><em>This will fetch all entry types from all sub-events for comprehensive management.</em></p>
+            <button onclick="listAllEntryTypes()">List All Entry Types</button>
+            <div id="listAllResponse" class="response"></div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = '';
+        const baseUrl = 'http://localhost:8000/api';
+        let allEntryTypesCache = []; // Cache for loaded entry types
+        let allSubEventsCache = []; // Cache for loaded sub-events
+
+        function showResponse(elementId, data, isError = false) {
+            const element = document.getElementById(elementId);
+            element.textContent = JSON.stringify(data, null, 2);
+            element.className = `response ${isError ? 'error' : 'success'}`;
+        }
+
+        function showWarning(elementId, data) {
+            const element = document.getElementById(elementId);
+            element.textContent = JSON.stringify(data, null, 2);
+            element.className = 'response warning';
+        }
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${baseUrl}/login/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.access;
+                    showResponse('loginResponse', { 
+                        message: 'Login successful!', 
+                        user: data.user,
+                        token_preview: authToken.substring(0, 20) + '...'
+                    });
+                    
+                    // Auto-load entry type IDs after successful login
+                    setTimeout(() => {
+                        loadEntryTypeIds();
+                        loadSubEventIds();
+                    }, 500);
+                } else {
+                    showResponse('loginResponse', data, true);
+                }
+            } catch (error) {
+                showResponse('loginResponse', { error: error.message }, true);
+            }
+        }
+
+        async function loadEntryTypeIds() {
+            if (!authToken) {
+                alert('Please login first!');
+                return;
+            }
+
+            try {
+                // Show loading state
+                const selectors = ['detailEntryTypeId', 'updateEntryTypeId', 'deleteEntryTypeId'];
+                selectors.forEach(id => {
+                    const select = document.getElementById(id);
+                    select.innerHTML = '<option value="">Loading...</option>';
+                });
+
+                // First, get all events to find all sub-events
+                const eventsResponse = await fetch(`${baseUrl}/admin/event-list/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (!eventsResponse.ok) {
+                    throw new Error('Failed to fetch events');
+                }
+
+                const events = await eventsResponse.json();
+                let allEntryTypes = [];
+
+                // For each event, get its sub-events and their entry types
+                for (const event of events) {
+                    try {
+                        // Get sub-events for this event
+                        const subEventsResponse = await fetch(`${baseUrl}/admin/sub-events/${event.id}/`, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`,
+                                'Content-Type': 'application/json',
+                            }
+                        });
+
+                        if (subEventsResponse.ok) {
+                            const subEvents = await subEventsResponse.json();
+                            
+                            // For each sub-event, get its entry types
+                            for (const subEvent of subEvents) {
+                                try {
+                                    const entryTypesResponse = await fetch(`${baseUrl}/admin/entry-types/${subEvent.id}/`, {
+                                        method: 'GET',
+                                        headers: {
+                                            'Authorization': `Bearer ${authToken}`,
+                                            'Content-Type': 'application/json',
+                                        }
+                                    });
+
+                                    if (entryTypesResponse.ok) {
+                                        const entryTypes = await entryTypesResponse.json();
+                                        
+                                        // Add context to each entry type
+                                        const enrichedEntryTypes = entryTypes.map(et => ({
+                                            ...et,
+                                            event_name: event.name,
+                                            event_code: event.code,
+                                            sub_event_name: subEvent.name,
+                                            sub_event_code: subEvent.code
+                                        }));
+                                        
+                                        allEntryTypes.push(...enrichedEntryTypes);
+                                    }
+                                } catch (error) {
+                                    console.warn(`Failed to fetch entry types for sub-event ${subEvent.id}:`, error);
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to fetch sub-events for event ${event.id}:`, error);
+                    }
+                }
+
+                // Cache the results
+                allEntryTypesCache = allEntryTypes;
+
+                // Sort by event name, then sub-event name, then entry type name
+                allEntryTypes.sort((a, b) => {
+                    if (a.event_name !== b.event_name) return a.event_name.localeCompare(b.event_name);
+                    if (a.sub_event_name !== b.sub_event_name) return a.sub_event_name.localeCompare(b.sub_event_name);
+                    return a.name.localeCompare(b.name);
+                });
+
+                // Populate all entry type dropdowns
+                selectors.forEach(id => {
+                    const select = document.getElementById(id);
+                    select.innerHTML = '<option value="">Select Entry Type ID...</option>';
+                    
+                    allEntryTypes.forEach(et => {
+                        const option = document.createElement('option');
+                        option.value = et.id;
+                        option.textContent = `ID: ${et.id} | ${et.event_name} > ${et.sub_event_name} > ${et.name} ($${et.price}) ${et.is_active ? '✅' : '❌'}`;
+                        select.appendChild(option);
+                    });
+                });
+
+                console.log(`Loaded ${allEntryTypes.length} entry types`);
+
+            } catch (error) {
+                console.error('Error loading entry type IDs:', error);
+                
+                // Reset dropdowns on error
+                const selectors = ['detailEntryTypeId', 'updateEntryTypeId', 'deleteEntryTypeId'];
+                selectors.forEach(id => {
+                    const select = document.getElementById(id);
+                    select.innerHTML = '<option value="">Error loading - try again</option>';
+                });
+                
+                alert('Failed to load entry type IDs. Please check console for details.');
+            }
+        }
+
+        async function loadSubEventIds() {
+            if (!authToken) {
+                alert('Please login first!');
+                return;
+            }
+
+            try {
+                // Show loading state
+                const select = document.getElementById('listSubEventId');
+                select.innerHTML = '<option value="">Loading...</option>';
+
+                // Get all events
+                const eventsResponse = await fetch(`${baseUrl}/admin/event-list/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (!eventsResponse.ok) {
+                    throw new Error('Failed to fetch events');
+                }
+
+                const events = await eventsResponse.json();
+                let allSubEvents = [];
+
+                // For each event, get its sub-events
+                for (const event of events) {
+                    try {
+                        const subEventsResponse = await fetch(`${baseUrl}/admin/sub-events/${event.id}/`, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`,
+                                'Content-Type': 'application/json',
+                            }
+                        });
+
+                        if (subEventsResponse.ok) {
+                            const subEvents = await subEventsResponse.json();
+                            
+                            // Add event context
+                            const enrichedSubEvents = subEvents.map(se => ({
+                                ...se,
+                                event_name: event.name,
+                                event_code: event.code
+                            }));
+                            
+                            allSubEvents.push(...enrichedSubEvents);
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to fetch sub-events for event ${event.id}:`, error);
+                    }
+                }
+
+                // Cache the results
+                allSubEventsCache = allSubEvents;
+
+                // Sort by event name, then sub-event name
+                allSubEvents.sort((a, b) => {
+                    if (a.event_name !== b.event_name) return a.event_name.localeCompare(b.event_name);
+                    return a.name.localeCompare(b.name);
+                });
+
+                // Populate sub-event dropdown
+                select.innerHTML = '<option value="">Select Sub-Event ID...</option>';
+                
+                allSubEvents.forEach(se => {
+                    const option = document.createElement('option');
+                    option.value = se.id;
+                    option.textContent = `ID: ${se.id} | ${se.event_name} > ${se.name} (${se.code}) ${se.is_active ? '✅' : '❌'}`;
+                    select.appendChild(option);
+                });
+
+                console.log(`Loaded ${allSubEvents.length} sub-events`);
+
+            } catch (error) {
+                console.error('Error loading sub-event IDs:', error);
+                
+                // Reset dropdown on error
+                const select = document.getElementById('listSubEventId');
+                select.innerHTML = '<option value="">Error loading - try again</option>';
+                
+                alert('Failed to load sub-event IDs. Please check console for details.');
+            }
+        }
+
+        async function getEntryTypeDetails() {
+            const entryTypeId = document.getElementById('detailEntryTypeId').value;
+            
+            if (!entryTypeId) {
+                showResponse('detailResponse', { error: 'Please enter entry type ID' }, true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseUrl}/admin/entry-type/${entryTypeId}/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResponse('detailResponse', data);
+                } else {
+                    showResponse('detailResponse', data, true);
+                }
+            } catch (error) {
+                showResponse('detailResponse', { error: error.message }, true);
+            }
+        }
+
+        async function updateEntryType() {
+            const entryTypeId = document.getElementById('updateEntryTypeId').value;
+            
+            if (!entryTypeId) {
+                showResponse('updateResponse', { error: 'Please select an entry type ID' }, true);
+                return;
+            }
+
+            // Pre-fill current values if available from cache
+            const cachedEntryType = allEntryTypesCache.find(et => et.id == entryTypeId);
+            if (cachedEntryType) {
+                // Show current values in the response for reference
+                showResponse('updateResponse', {
+                    info: 'Current values for reference:',
+                    current_data: {
+                        name: cachedEntryType.name,
+                        price: cachedEntryType.price,
+                        description: cachedEntryType.description,
+                        is_active: cachedEntryType.is_active,
+                        event: cachedEntryType.event_name,
+                        sub_event: cachedEntryType.sub_event_name
+                    }
+                });
+            }
+
+            // Build update data
+            const updateData = {};
+            
+            const name = document.getElementById('updateName').value;
+            if (name) updateData.name = name;
+            
+            const price = document.getElementById('updatePrice').value;
+            if (price) updateData.price = parseFloat(price);
+            
+            const description = document.getElementById('updateDescription').value;
+            if (description) updateData.description = description;
+            
+            const isActive = document.getElementById('updateIsActive').value;
+            if (isActive !== '') updateData.is_active = isActive === 'true';
+
+            if (Object.keys(updateData).length === 0) {
+                showResponse('updateResponse', { error: 'Please provide at least one field to update' }, true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseUrl}/admin/entry-type/${entryTypeId}/update/`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(updateData)
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.note && data.note.includes('Limited editing')) {
+                        showWarning('updateResponse', data);
+                    } else {
+                        showResponse('updateResponse', data);
+                    }
+                } else {
+                    showResponse('updateResponse', data, true);
+                }
+            } catch (error) {
+                showResponse('updateResponse', { error: error.message }, true);
+            }
+        }
+
+        async function deleteEntryType() {
+            const entryTypeId = document.getElementById('deleteEntryTypeId').value;
+            
+            if (!entryTypeId) {
+                showResponse('deleteResponse', { error: 'Please select an entry type ID' }, true);
+                return;
+            }
+
+            // Show entry type info before deletion
+            const cachedEntryType = allEntryTypesCache.find(et => et.id == entryTypeId);
+            const entryTypeInfo = cachedEntryType ? 
+                `${cachedEntryType.event_name} > ${cachedEntryType.sub_event_name} > ${cachedEntryType.name}` : 
+                `Entry Type ID: ${entryTypeId}`;
+
+            if (!confirm(`Are you sure you want to delete this entry type?\n\n${entryTypeInfo}`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseUrl}/admin/entry-type/${entryTypeId}/delete/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.action === 'soft_delete') {
+                        showWarning('deleteResponse', data);
+                    } else {
+                        showResponse('deleteResponse', data);
+                    }
+                } else {
+                    showResponse('deleteResponse', data, true);
+                }
+            } catch (error) {
+                showResponse('deleteResponse', { error: error.message }, true);
+            }
+        }
+
+        async function listEntryTypes() {
+            const subEventId = document.getElementById('listSubEventId').value;
+            
+            if (!subEventId) {
+                showResponse('listResponse', { error: 'Please select a sub-event ID' }, true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${baseUrl}/admin/entry-types/${subEventId}/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResponse('listResponse', { 
+                        count: data.length, 
+                        entry_types: data 
+                    });
+                } else {
+                    showResponse('listResponse', data, true);
+                }
+            } catch (error) {
+                showResponse('listResponse', { error: error.message }, true);
+            }
+        }
+
+        async function listAllEntryTypes() {
+            try {
+                // First, get all events to find all sub-events
+                const eventsResponse = await fetch(`${baseUrl}/admin/event-list/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (!eventsResponse.ok) {
+                    const errorData = await eventsResponse.json();
+                    showResponse('listAllResponse', errorData, true);
+                    return;
+                }
+
+                const events = await eventsResponse.json();
+                let allEntryTypes = [];
+                let totalCount = 0;
+
+                // For each event, get its sub-events and their entry types
+                for (const event of events) {
+                    try {
+                        // Get sub-events for this event
+                        const subEventsResponse = await fetch(`${baseUrl}/admin/sub-events/${event.id}/`, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`,
+                                'Content-Type': 'application/json',
+                            }
+                        });
+
+                        if (subEventsResponse.ok) {
+                            const subEvents = await subEventsResponse.json();
+                            
+                            // For each sub-event, get its entry types
+                            for (const subEvent of subEvents) {
+                                try {
+                                    const entryTypesResponse = await fetch(`${baseUrl}/admin/entry-types/${subEvent.id}/`, {
+                                        method: 'GET',
+                                        headers: {
+                                            'Authorization': `Bearer ${authToken}`,
+                                            'Content-Type': 'application/json',
+                                        }
+                                    });
+
+                                    if (entryTypesResponse.ok) {
+                                        const entryTypes = await entryTypesResponse.json();
+                                        
+                                        // Add event and sub-event context to each entry type
+                                        const enrichedEntryTypes = entryTypes.map(et => ({
+                                            ...et,
+                                            event_id: event.id,
+                                            event_code: event.code,
+                                            sub_event_id: subEvent.id,
+                                            sub_event_code: subEvent.code
+                                        }));
+                                        
+                                        allEntryTypes.push(...enrichedEntryTypes);
+                                        totalCount += entryTypes.length;
+                                    }
+                                } catch (error) {
+                                    console.warn(`Failed to fetch entry types for sub-event ${subEvent.id}:`, error);
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.warn(`Failed to fetch sub-events for event ${event.id}:`, error);
+                    }
+                }
+
+                // Group by event for better display
+                const groupedByEvent = {};
+                allEntryTypes.forEach(et => {
+                    const eventKey = `${et.event_name} (${et.event_code})`;
+                    if (!groupedByEvent[eventKey]) {
+                        groupedByEvent[eventKey] = {};
+                    }
+                    
+                    const subEventKey = `${et.sub_event_name} (${et.sub_event_code})`;
+                    if (!groupedByEvent[eventKey][subEventKey]) {
+                        groupedByEvent[eventKey][subEventKey] = [];
+                    }
+                    
+                    groupedByEvent[eventKey][subEventKey].push({
+                        id: et.id,
+                        name: et.name,
+                        price: et.price,
+                        description: et.description,
+                        is_active: et.is_active
+                    });
+                });
+
+                showResponse('listAllResponse', {
+                    total_entry_types: totalCount,
+                    total_events: events.length,
+                    summary: `Found ${totalCount} entry types across ${events.length} events`,
+                    grouped_by_event: groupedByEvent,
+                    flat_list: allEntryTypes
+                });
+
+            } catch (error) {
+                showResponse('listAllResponse', { error: error.message }, true);
+            }
+        }
+    </script>
+</body>
+</html>

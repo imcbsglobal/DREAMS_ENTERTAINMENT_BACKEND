@@ -417,6 +417,186 @@ class AdminEntryTypesView(generics.ListAPIView):
         return EntryType.objects.filter(sub_event_id=sub_event_id)
 
 
+class EntryTypeDetailView(generics.RetrieveAPIView):
+    """Admin: Get single entry type details"""
+    permission_classes = [IsAdmin]
+    serializer_class = EntryTypeSerializer
+    queryset = EntryType.objects.all()
+    lookup_field = 'id'
+
+
+class UpdateEntryTypeView(APIView):
+    """Admin: Update entry type with conditional editing based on ticket generation"""
+    permission_classes = [IsAdmin]
+    
+    @transaction.atomic
+    def put(self, request, entry_type_id):
+        try:
+            entry_type = EntryType.objects.get(id=entry_type_id)
+        except EntryType.DoesNotExist:
+            return Response({'error': 'Entry type not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if tickets exist for this entry type
+        tickets_count = Ticket.objects.filter(entry_type=entry_type).count()
+        has_generated_tickets = tickets_count > 0
+        
+        if has_generated_tickets:
+            # RESTRICTED EDITING - Only safe fields
+            return self._handle_restricted_edit(entry_type, request.data, tickets_count)
+        else:
+            # FULL EDITING - All fields allowed
+            return self._handle_full_edit(entry_type, request.data)
+    
+    def _handle_restricted_edit(self, entry_type, data, tickets_count):
+        """Handle editing for entry types with existing tickets"""
+        
+        # Define allowed fields for entry types with tickets
+        ALLOWED_FIELDS = [
+            'description',  # Safe to update description
+            'is_active'     # Safe to deactivate/activate
+        ]
+        
+        # Check for restricted fields
+        restricted_fields = []
+        for field in data.keys():
+            if field not in ALLOWED_FIELDS:
+                restricted_fields.append(field)
+        
+        if restricted_fields:
+            return Response({
+                'error': 'Cannot edit these fields for entry type with existing tickets',
+                'details': {
+                    'tickets_generated': tickets_count,
+                    'restricted_fields': restricted_fields,
+                    'allowed_fields': ALLOWED_FIELDS,
+                    'reason': 'Entry type has generated tickets - only safe fields can be edited to preserve historical data'
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update only allowed fields
+        updated_fields = []
+        
+        if 'description' in data:
+            entry_type.description = data['description']
+            updated_fields.append('description')
+        
+        if 'is_active' in data:
+            entry_type.is_active = data['is_active']
+            updated_fields.append('is_active')
+        
+        entry_type.save()
+        
+        return Response({
+            'message': 'Entry type updated successfully (restricted mode)',
+            'note': f'Limited editing due to {tickets_count} generated tickets',
+            'updated_fields': updated_fields,
+            'data': EntryTypeSerializer(entry_type).data
+        })
+    
+    def _handle_full_edit(self, entry_type, data):
+        """Handle full editing for entry types with no tickets"""
+        
+        # Validate all fields
+        validation_errors = self._validate_full_edit(entry_type, data)
+        if validation_errors:
+            return Response({'errors': validation_errors}, status=status.HTTP_400_BAD_REQUEST)
+        
+        updated_fields = []
+        
+        # Update all allowed fields
+        editable_fields = ['name', 'price', 'description', 'is_active']
+        for field in editable_fields:
+            if field in data:
+                setattr(entry_type, field, data[field])
+                updated_fields.append(field)
+        
+        entry_type.save()
+        
+        return Response({
+            'message': 'Entry type updated successfully (full edit mode)',
+            'note': 'All fields editable - no tickets generated yet',
+            'updated_fields': updated_fields,
+            'data': EntryTypeSerializer(entry_type).data
+        })
+    
+    def _validate_full_edit(self, entry_type, data):
+        """Validate full edit data"""
+        errors = {}
+        
+        # Name uniqueness validation (within same sub-event)
+        if 'name' in data:
+            if EntryType.objects.filter(
+                sub_event=entry_type.sub_event, 
+                name=data['name']
+            ).exclude(id=entry_type.id).exists():
+                errors['name'] = 'Entry type name already exists in this sub-event'
+        
+        # Price validation
+        if 'price' in data:
+            try:
+                price = float(data['price'])
+                if price < 0:
+                    errors['price'] = 'Price cannot be negative'
+            except (ValueError, TypeError):
+                errors['price'] = 'Invalid price format'
+        
+        # Boolean validation for is_active
+        if 'is_active' in data and not isinstance(data['is_active'], bool):
+            errors['is_active'] = 'is_active must be a boolean value'
+        
+        return errors
+
+
+class DeleteEntryTypeView(APIView):
+    """Admin: Smart delete entry type with validation"""
+    permission_classes = [IsAdmin]
+    
+    def delete(self, request, entry_type_id):
+        try:
+            entry_type = EntryType.objects.get(id=entry_type_id)
+        except EntryType.DoesNotExist:
+            return Response({'error': 'Entry type not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if tickets exist for this entry type
+        tickets_count = Ticket.objects.filter(entry_type=entry_type).count()
+        
+        # Store info for response
+        entry_type_name = entry_type.name
+        sub_event_name = entry_type.sub_event.name
+        event_name = entry_type.sub_event.event.name
+        
+        if tickets_count > 0:
+            # SOFT DELETE - preserve historical data
+            entry_type.is_active = False
+            entry_type.save()
+            
+            return Response({
+                'message': f'Entry type "{entry_type_name}" deactivated successfully',
+                'action': 'soft_delete',
+                'details': {
+                    'entry_type': entry_type_name,
+                    'sub_event': sub_event_name,
+                    'event': event_name,
+                    'tickets_preserved': tickets_count,
+                    'note': 'Entry type deactivated to preserve ticket history. It will not appear in staff lists but existing tickets remain intact.'
+                }
+            })
+        else:
+            # HARD DELETE - safe to remove completely
+            entry_type.delete()
+            
+            return Response({
+                'message': f'Entry type "{entry_type_name}" deleted permanently',
+                'action': 'hard_delete',
+                'details': {
+                    'entry_type': entry_type_name,
+                    'sub_event': sub_event_name,
+                    'event': event_name,
+                    'note': 'Entry type deleted completely as no tickets were generated for it.'
+                }
+            })
+
+
 class ConfigureTicketView(APIView):
     """Admin: Configure ticket customization"""
     permission_classes = [IsAdmin]
