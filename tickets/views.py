@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.models import Sum, Count, Q
@@ -823,21 +824,57 @@ class EventListView(generics.ListAPIView):
     serializer_class = EventSerializer
 
 
+class TicketReportPagination(PageNumberPagination):
+    page_size = 100  # Default 100 tickets per page
+    page_size_query_param = 'page_size'
+    max_page_size = 500  # Maximum 500 tickets per page
+
+
 class TicketsReportView(APIView):
-    """Admin: Tickets report"""
+    """Admin: Tickets report with pagination support"""
     permission_classes = [IsAdmin]
 
     def get(self, request):
         event_id = request.query_params.get('event_id')
         
-        queryset = Ticket.objects.all()
+        # Optimize query with ordering and select_related
+        queryset = Ticket.objects.select_related(
+            'event', 'sub_event', 'entry_type', 'staff'
+        ).order_by('-created_at')
+        
         if event_id:
             queryset = queryset.filter(event_id=event_id)
         
+        # Check if pagination is requested (page parameter exists)
+        if 'page' in request.query_params:
+            # Use pagination
+            paginator = TicketReportPagination()
+            page = paginator.paginate_queryset(queryset, request)
+            
+            if page is not None:
+                tickets = TicketSerializer(page, many=True).data
+                return paginator.get_paginated_response({
+                    'total_tickets': queryset.count(),
+                    'tickets': tickets
+                })
+        
+        # Backward compatibility - no pagination requested
+        total_count = queryset.count()
+        
+        # Safety check for large datasets
+        if total_count > 1000:
+            return Response({
+                'error': f'Dataset too large ({total_count} tickets). Please use pagination.',
+                'total_tickets': total_count,
+                'suggestion': 'Add ?page=1&page_size=100 to your request for paginated results',
+                'example_url': f'{request.build_absolute_uri()}?page=1&page_size=100'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Small datasets - return as before
         tickets = TicketSerializer(queryset, many=True).data
         
         return Response({
-            'total_tickets': queryset.count(),
+            'total_tickets': total_count,
             'tickets': tickets
         })
 
