@@ -831,7 +831,7 @@ class TicketReportPagination(PageNumberPagination):
 
 
 class TicketsReportView(APIView):
-    """Admin: Tickets report with pagination support"""
+    """Admin: Tickets report with pagination and date filtering support"""
     permission_classes = [IsAdmin]
 
     def get(self, request):
@@ -842,8 +842,12 @@ class TicketsReportView(APIView):
             'event', 'sub_event', 'entry_type', 'staff'
         ).order_by('-created_at')
         
+        # Existing event filter (unchanged)
         if event_id:
             queryset = queryset.filter(event_id=event_id)
+        
+        # NEW: Date filtering (optional, backward compatible)
+        queryset = self._apply_date_filters(queryset, request.query_params)
         
         # Check if pagination is requested (page parameter exists)
         if 'page' in request.query_params:
@@ -877,18 +881,66 @@ class TicketsReportView(APIView):
             'total_tickets': total_count,
             'tickets': tickets
         })
+    
+    def _apply_date_filters(self, queryset, params):
+        """Apply date filtering to queryset (backward compatible)"""
+        from datetime import datetime, date
+        
+        # Today filter
+        if params.get('today') == 'true':
+            today_date = timezone.now().date()
+            return queryset.filter(created_at__date=today_date)
+        
+        # Specific date filter
+        date_param = params.get('date')
+        if date_param:
+            try:
+                filter_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+                return queryset.filter(created_at__date=filter_date)
+            except ValueError:
+                pass  # Invalid date format, ignore filter
+        
+        # Date range filter
+        start_date = params.get('start_date')
+        end_date = params.get('end_date')
+        if start_date and end_date:
+            try:
+                start = datetime.strptime(start_date, '%Y-%m-%d').date()
+                end = datetime.strptime(end_date, '%Y-%m-%d').date()
+                return queryset.filter(created_at__date__range=[start, end])
+            except ValueError:
+                pass  # Invalid date format, ignore filter
+        elif start_date:
+            try:
+                start = datetime.strptime(start_date, '%Y-%m-%d').date()
+                return queryset.filter(created_at__date__gte=start)
+            except ValueError:
+                pass
+        elif end_date:
+            try:
+                end = datetime.strptime(end_date, '%Y-%m-%d').date()
+                return queryset.filter(created_at__date__lte=end)
+            except ValueError:
+                pass
+        
+        return queryset
 
 
 class RevenueReportView(APIView):
-    """Admin: Revenue report"""
+    """Admin: Revenue report with date filtering support"""
     permission_classes = [IsAdmin]
 
     def get(self, request):
         event_id = request.query_params.get('event_id')
         
         queryset = Ticket.objects.all()
+        
+        # Existing event filter (unchanged)
         if event_id:
             queryset = queryset.filter(event_id=event_id)
+        
+        # NEW: Date filtering (optional, backward compatible)
+        queryset = self._apply_date_filters(queryset, request.query_params)
         
         # Calculate revenue by event
         revenue_by_event = queryset.values('event__name', 'event__code').annotate(
@@ -902,10 +954,53 @@ class RevenueReportView(APIView):
             'total_revenue': total_revenue,
             'revenue_by_event': list(revenue_by_event)
         })
+    
+    def _apply_date_filters(self, queryset, params):
+        """Apply date filtering to queryset (backward compatible)"""
+        from datetime import datetime
+        
+        # Today filter
+        if params.get('today') == 'true':
+            today_date = timezone.now().date()
+            return queryset.filter(created_at__date=today_date)
+        
+        # Specific date filter
+        date_param = params.get('date')
+        if date_param:
+            try:
+                filter_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+                return queryset.filter(created_at__date=filter_date)
+            except ValueError:
+                pass  # Invalid date format, ignore filter
+        
+        # Date range filter
+        start_date = params.get('start_date')
+        end_date = params.get('end_date')
+        if start_date and end_date:
+            try:
+                start = datetime.strptime(start_date, '%Y-%m-%d').date()
+                end = datetime.strptime(end_date, '%Y-%m-%d').date()
+                return queryset.filter(created_at__date__range=[start, end])
+            except ValueError:
+                pass  # Invalid date format, ignore filter
+        elif start_date:
+            try:
+                start = datetime.strptime(start_date, '%Y-%m-%d').date()
+                return queryset.filter(created_at__date__gte=start)
+            except ValueError:
+                pass
+        elif end_date:
+            try:
+                end = datetime.strptime(end_date, '%Y-%m-%d').date()
+                return queryset.filter(created_at__date__lte=end)
+            except ValueError:
+                pass
+        
+        return queryset
 
 
 class StaffSummaryReportView(APIView):
-    """Admin: Staff summary report"""
+    """Admin: Staff summary report with date filtering support"""
     permission_classes = [IsAdmin]
 
     def get(self, request):
@@ -915,10 +1010,16 @@ class StaffSummaryReportView(APIView):
         if staff_id:
             queryset = queryset.filter(id=staff_id)
         
+        # NEW: Date filtering for ticket calculations
+        ticket_queryset = Ticket.objects.all()
+        ticket_queryset = self._apply_date_filters(ticket_queryset, request.query_params)
+        
         summary = []
         for staff in queryset:
-            tickets_generated = Ticket.objects.filter(staff=staff.user).count()
-            total_revenue = Ticket.objects.filter(staff=staff.user).aggregate(
+            # Filter tickets by date if specified
+            staff_tickets = ticket_queryset.filter(staff=staff.user)
+            tickets_generated = staff_tickets.count()
+            total_revenue = staff_tickets.aggregate(
                 total=Sum('price')
             )['total'] or 0
             
@@ -936,6 +1037,49 @@ class StaffSummaryReportView(APIView):
             })
         
         return Response({'staff_summary': summary})
+    
+    def _apply_date_filters(self, queryset, params):
+        """Apply date filtering to queryset (backward compatible)"""
+        from datetime import datetime
+        
+        # Today filter
+        if params.get('today') == 'true':
+            today_date = timezone.now().date()
+            return queryset.filter(created_at__date=today_date)
+        
+        # Specific date filter
+        date_param = params.get('date')
+        if date_param:
+            try:
+                filter_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+                return queryset.filter(created_at__date=filter_date)
+            except ValueError:
+                pass  # Invalid date format, ignore filter
+        
+        # Date range filter
+        start_date = params.get('start_date')
+        end_date = params.get('end_date')
+        if start_date and end_date:
+            try:
+                start = datetime.strptime(start_date, '%Y-%m-%d').date()
+                end = datetime.strptime(end_date, '%Y-%m-%d').date()
+                return queryset.filter(created_at__date__range=[start, end])
+            except ValueError:
+                pass  # Invalid date format, ignore filter
+        elif start_date:
+            try:
+                start = datetime.strptime(start_date, '%Y-%m-%d').date()
+                return queryset.filter(created_at__date__gte=start)
+            except ValueError:
+                pass
+        elif end_date:
+            try:
+                end = datetime.strptime(end_date, '%Y-%m-%d').date()
+                return queryset.filter(created_at__date__lte=end)
+            except ValueError:
+                pass
+        
+        return queryset
 
 
 class DeleteEventView(APIView):

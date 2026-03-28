@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tickets Report Pagination Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        input, select, button {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        input, select {
+            width: 200px;
+        }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .test-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .status.loading {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .pagination-info {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .tickets-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .tickets-table th,
+        .tickets-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        .tickets-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        
+        .tickets-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .response-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .json-response {
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎫 Festival Ticket Reports - Date Filtering Test</h1>
+            <p>Test the new date filtering functionality for all report APIs</p>
+            <p style="color: #28a745; font-weight: bold;">🆕 NEW: Today's reports, specific dates, and date ranges!</p>
+        </div>
+        
+        <!-- Login Section -->
+        <div class="form-group">
+            <label for="apiUrl">API Base URL:</label>
+            <input type="text" id="apiUrl" value="http://localhost:8000/api" placeholder="http://localhost:8000/api">
+        </div>
+        
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" placeholder="admin username">
+        </div>
+        
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" placeholder="admin password">
+        </div>
+        
+        <button onclick="login()">🔐 Login</button>
+        
+        <div id="loginStatus" class="status hidden"></div>
+    </div>
+    
+    <!-- Test Controls -->
+    <div class="container" id="testControls" style="display: none;">
+        <h2>📊 Test Controls <span id="versionIndicator" style="font-size: 14px; margin-left: 10px;">🔍 Checking...</span></h2>
+        
+        <div class="form-group">
+            <label for="eventId">Event ID (optional):</label>
+            <input type="number" id="eventId" placeholder="Leave empty for all events">
+        </div>
+        
+        <div class="form-group">
+            <label for="pageSize">Page Size:</label>
+            <select id="pageSize">
+                <option value="10">10 tickets per page</option>
+                <option value="50">50 tickets per page</option>
+                <option value="100" selected>100 tickets per page</option>
+                <option value="200">200 tickets per page</option>
+                <option value="500">500 tickets per page</option>
+            </select>
+        </div>
+        
+        <div class="test-buttons">
+            <button onclick="checkNewAPIDeployed()" style="background-color: #28a745;">✅ Check if New API is Deployed</button>
+            <button onclick="testLegacyAPI()">🔄 Test Legacy API (No Pagination)</button>
+            <button onclick="testPaginatedAPI(1)">📄 Test Paginated API (Page 1)</button>
+            <button onclick="testLargeDataset()">⚠️ Test Large Dataset Protection</button>
+            <button onclick="loadAllEvents()">📋 Load All Events</button>
+        </div>
+        
+        <!-- NEW: Date Filtering Section -->
+        <div class="container" style="background-color: #e8f5e8; border: 2px solid #28a745; margin: 15px 0;">
+            <h3 style="color: #155724; margin-top: 0;">🆕 NEW: Date Filtering Tests</h3>
+            
+            <div class="form-group">
+                <label for="testDate">Specific Date (YYYY-MM-DD):</label>
+                <input type="date" id="testDate" style="width: 200px;">
+            </div>
+            
+            <div class="form-group">
+                <label for="startDate">Start Date:</label>
+                <input type="date" id="startDate" style="width: 150px;">
+                <label for="endDate" style="margin-left: 20px;">End Date:</label>
+                <input type="date" id="endDate" style="width: 150px;">
+            </div>
+            
+            <div class="test-buttons">
+                <button onclick="testTodayReports()" style="background-color: #17a2b8;">📅 Today's Reports</button>
+                <button onclick="testSpecificDateReports()" style="background-color: #6f42c1;">📆 Specific Date Reports</button>
+                <button onclick="testDateRangeReports()" style="background-color: #fd7e14;">📊 Date Range Reports</button>
+                <button onclick="testAllDateFilters()" style="background-color: #20c997;">🔍 Test All Date Filters</button>
+            </div>
+        </div>
+        
+        <!-- Pagination Controls -->
+        <div class="pagination-controls" id="paginationControls" style="display: none;">
+            <button id="prevBtn" onclick="previousPage()" disabled>⬅️ Previous</button>
+            <span id="pageInfo">Page 1 of 1</span>
+            <button id="nextBtn" onclick="nextPage()" disabled>➡️ Next</button>
+            <span>|</span>
+            <input type="number" id="gotoPage" placeholder="Go to page" style="width: 100px;">
+            <button onclick="goToPage()">Go</button>
+        </div>
+        
+        <div id="testStatus" class="status hidden"></div>
+        
+        <!-- Results Display -->
+        <div class="pagination-info" id="paginationInfo" style="display: none;"></div>
+        
+        <div id="resultsContainer" style="display: none;">
+            <h3>📋 Results</h3>
+            <div id="ticketsDisplay"></div>
+        </div>
+        
+        <!-- Raw Response -->
+        <div id="responseContainer" style="display: none;">
+            <h3>🔍 Raw API Response</h3>
+            <div class="response-container">
+                <pre id="rawResponse" class="json-response"></pre>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Events List -->
+    <div class="container" id="eventsContainer" style="display: none;">
+        <h2>🎪 Available Events</h2>
+        <div id="eventsList"></div>
+    </div>
+
+    <script>
+        let accessToken = '';
+        let currentPage = 1;
+        let totalPages = 1;
+        let currentEventId = null;
+        let currentPageSize = 100;
+        
+        // Login function
+        async function login() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                showStatus('loginStatus', 'Please enter username and password', 'error');
+                return;
+            }
+            
+            showStatus('loginStatus', 'Logging in...', 'loading');
+            
+            try {
+                const response = await fetch(`${apiUrl}/login/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    accessToken = data.access;
+                    showStatus('loginStatus', `✅ Login successful! Role: ${data.user.role}`, 'success');
+                    document.getElementById('testControls').style.display = 'block';
+                    
+                    // Auto-check API version after login
+                    setTimeout(quickVersionCheck, 1000);
+                } else {
+                    showStatus('loginStatus', `❌ Login failed: ${data.detail || 'Invalid credentials'}`, 'error');
+                }
+            } catch (error) {
+                showStatus('loginStatus', `❌ Login error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test legacy API (no pagination)
+        async function testLegacyAPI() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const eventId = document.getElementById('eventId').value;
+            
+            let url = `${apiUrl}/admin/reports/tickets/`;
+            if (eventId) {
+                url += `?event_id=${eventId}`;
+            }
+            
+            showStatus('testStatus', '🔄 Testing legacy API (no pagination)...', 'loading');
+            
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.tickets) {
+                        showStatus('testStatus', `✅ Legacy API works! Got ${data.total_tickets} tickets`, 'success');
+                        displayResults(data, false);
+                    } else {
+                        showStatus('testStatus', `⚠️ ${data.error || 'Unexpected response'}`, 'error');
+                    }
+                } else {
+                    showStatus('testStatus', `❌ API Error: ${data.error || response.statusText}`, 'error');
+                }
+                
+                showRawResponse(data);
+            } catch (error) {
+                showStatus('testStatus', `❌ Request failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test paginated API
+        async function testPaginatedAPI(page = 1) {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const eventId = document.getElementById('eventId').value;
+            const pageSize = document.getElementById('pageSize').value;
+            
+            currentPage = page;
+            currentEventId = eventId;
+            currentPageSize = pageSize;
+            
+            let url = `${apiUrl}/admin/reports/tickets/?page=${page}&page_size=${pageSize}`;
+            if (eventId) {
+                url += `&event_id=${eventId}`;
+            }
+            
+            showStatus('testStatus', `🔄 Loading page ${page} with ${pageSize} tickets per page...`, 'loading');
+            
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.results) {
+                        // Paginated response
+                        totalPages = Math.ceil(data.count / pageSize);
+                        showStatus('testStatus', `✅ Paginated API works! Page ${page} of ${totalPages}`, 'success');
+                        displayResults(data.results, true, data);
+                        updatePaginationControls(data);
+                    } else {
+                        showStatus('testStatus', `⚠️ ${data.error || 'Unexpected response'}`, 'error');
+                    }
+                } else {
+                    showStatus('testStatus', `❌ API Error: ${data.error || response.statusText}`, 'error');
+                }
+                
+                showRawResponse(data);
+            } catch (error) {
+                showStatus('testStatus', `❌ Request failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Enhanced debugging version of API check
+        async function checkNewAPIDeployed() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            
+            showStatus('testStatus', '🔍 Checking if new pagination API is deployed...', 'loading');
+            
+            // Debug info
+            let debugInfo = `<div style="background: #e9ecef; padding: 10px; margin: 10px 0; border-radius: 4px;">`;
+            debugInfo += `<h4>🔧 Debug Information:</h4>`;
+            debugInfo += `<p><strong>API URL:</strong> ${apiUrl}</p>`;
+            debugInfo += `<p><strong>Token Present:</strong> ${accessToken ? 'Yes' : 'No'}</p>`;
+            debugInfo += `<p><strong>Token Preview:</strong> ${accessToken ? accessToken.substring(0, 20) + '...' : 'None'}</p>`;
+            debugInfo += `</div>`;
+            
+            const tests = [
+                {
+                    name: 'Basic API Connection',
+                    test: async () => {
+                        try {
+                            const response = await fetch(`${apiUrl}/admin/event-list/`, {
+                                headers: { 
+                                    'Authorization': `Bearer ${accessToken}`,
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                            const data = await response.json();
+                            return {
+                                passed: response.ok,
+                                details: response.ok ? `Connected (${response.status})` : `Failed (${response.status}): ${data.detail || data.error || 'Unknown error'}`
+                            };
+                        } catch (error) {
+                            return {
+                                passed: false,
+                                details: `Network Error: ${error.message} - Check CORS, URL, or server status`
+                            };
+                        }
+                    }
+                },
+                {
+                    name: 'Tickets API Basic Access',
+                    test: async () => {
+                        try {
+                            const response = await fetch(`${apiUrl}/admin/reports/tickets/`, {
+                                headers: { 
+                                    'Authorization': `Bearer ${accessToken}`,
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                            const data = await response.json();
+                            
+                            debugInfo += `<p><strong>Basic Tickets Response Status:</strong> ${response.status}</p>`;
+                            debugInfo += `<p><strong>Response Keys:</strong> ${Object.keys(data).join(', ')}</p>`;
+                            
+                            return {
+                                passed: response.ok || response.status === 400, // 400 might be large dataset protection
+                                details: response.ok ? 
+                                    (data.tickets ? `Old API - Got ${data.total_tickets} tickets directly` : 
+                                     data.error ? `New API - Protection: ${data.error.substring(0, 50)}...` : 'Unknown response') :
+                                    `HTTP ${response.status}: ${data.detail || data.error || 'Unknown error'}`
+                            };
+                        } catch (error) {
+                            return {
+                                passed: false,
+                                details: `Network Error: ${error.message}`
+                            };
+                        }
+                    }
+                },
+                {
+                    name: 'Pagination Parameter Test',
+                    test: async () => {
+                        try {
+                            const testUrl = `${apiUrl}/admin/reports/tickets/?page=1&page_size=5`;
+                            debugInfo += `<p><strong>Pagination Test URL:</strong> ${testUrl}</p>`;
+                            
+                            const response = await fetch(testUrl, {
+                                headers: { 
+                                    'Authorization': `Bearer ${accessToken}`,
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                            const data = await response.json();
+                            
+                            debugInfo += `<p><strong>Pagination Response Status:</strong> ${response.status}</p>`;
+                            debugInfo += `<p><strong>Pagination Response Keys:</strong> ${Object.keys(data).join(', ')}</p>`;
+                            
+                            if (data.results) {
+                                return {
+                                    passed: true,
+                                    details: `✅ NEW API WORKING! Paginated response with ${data.results.tickets?.length || 0} tickets`
+                                };
+                            } else if (data.tickets) {
+                                return {
+                                    passed: false,
+                                    details: `❌ OLD API - Direct tickets array with ${data.tickets.length} tickets`
+                                };
+                            } else if (data.error) {
+                                return {
+                                    passed: true, // Error might be large dataset protection
+                                    details: `⚠️ API Response: ${data.error.substring(0, 100)}...`
+                                };
+                            } else {
+                                return {
+                                    passed: false,
+                                    details: `❓ Unexpected response structure`
+                                };
+                            }
+                        } catch (error) {
+                            return {
+                                passed: false,
+                                details: `Network Error: ${error.message} - Possible CORS or server issue`
+                            };
+                        }
+                    }
+                },
+                {
+                    name: 'Server Response Headers Check',
+                    test: async () => {
+                        try {
+                            const response = await fetch(`${apiUrl}/admin/reports/tickets/?page=1&page_size=1`, {
+                                headers: { 
+                                    'Authorization': `Bearer ${accessToken}`,
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                            
+                            const corsHeader = response.headers.get('Access-Control-Allow-Origin');
+                            const contentType = response.headers.get('Content-Type');
+                            
+                            debugInfo += `<p><strong>CORS Header:</strong> ${corsHeader || 'Missing'}</p>`;
+                            debugInfo += `<p><strong>Content-Type:</strong> ${contentType || 'Missing'}</p>`;
+                            
+                            return {
+                                passed: true, // This is just informational
+                                details: `CORS: ${corsHeader || 'Not set'}, Content-Type: ${contentType || 'Not set'}`
+                            };
+                        } catch (error) {
+                            return {
+                                passed: false,
+                                details: `Cannot check headers: ${error.message}`
+                            };
+                        }
+                    }
+                }
+            ];
+            
+            let allPassed = true;
+            let resultHtml = debugInfo;
+            resultHtml += '<div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;"><h4>🔍 API Deployment Check Results:</h4>';
+            
+            for (const testCase of tests) {
+                try {
+                    const result = await testCase.test();
+                    const icon = result.passed ? '✅' : '❌';
+                    const color = result.passed ? '#28a745' : '#dc3545';
+                    
+                    resultHtml += `
+                        <div style="margin: 8px 0; padding: 8px; border-left: 3px solid ${color};">
+                            ${icon} <strong>${testCase.name}:</strong> ${result.details}
+                        </div>
+                    `;
+                    
+                    if (!result.passed && testCase.name !== 'Server Response Headers Check') {
+                        allPassed = false;
+                    }
+                } catch (error) {
+                    resultHtml += `
+                        <div style="margin: 8px 0; padding: 8px; border-left: 3px solid #dc3545;">
+                            ❌ <strong>${testCase.name}:</strong> Error - ${error.message}
+                        </div>
+                    `;
+                    allPassed = false;
+                }
+            }
+            
+            // Add troubleshooting guide
+            resultHtml += `
+                <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 4px;">
+                    <h4>🛠️ Troubleshooting Guide:</h4>
+                    <ul style="margin: 10px 0; padding-left: 20px;">
+                        <li><strong>Network Errors:</strong> Check if server is running and accessible</li>
+                        <li><strong>CORS Issues:</strong> Ensure CORS_ALLOW_ALL_ORIGINS = True in production settings</li>
+                        <li><strong>Old API Detected:</strong> New code not deployed or server not restarted</li>
+                        <li><strong>Auth Errors:</strong> Token might be expired, try re-login</li>
+                        <li><strong>URL Issues:</strong> Verify the API base URL is correct</li>
+                    </ul>
+                    <p><strong>Quick Fix Commands:</strong></p>
+                    <code style="background: #f8f9fa; padding: 5px; display: block; margin: 5px 0;">
+                        # On production server:<br>
+                        git pull origin main<br>
+                        python manage.py collectstatic --noinput<br>
+                        sudo systemctl restart your-app-service
+                    </code>
+                </div>
+            `;
+            
+            // Overall result
+            if (allPassed) {
+                resultHtml += '<div style="margin-top: 15px; padding: 10px; background: #d4edda; color: #155724; border-radius: 4px; font-weight: bold;">🎉 NEW PAGINATION API IS SUCCESSFULLY DEPLOYED!</div>';
+                showStatus('testStatus', '✅ New pagination API is working in production!', 'success');
+            } else {
+                resultHtml += '<div style="margin-top: 15px; padding: 10px; background: #f8d7da; color: #721c24; border-radius: 4px; font-weight: bold;">⚠️ ISSUES DETECTED - Check details above</div>';
+                showStatus('testStatus', '❌ API issues detected - check detailed results', 'error');
+            }
+            
+            resultHtml += '</div>';
+            
+            // Show detailed results
+            document.getElementById('ticketsDisplay').innerHTML = resultHtml;
+            document.getElementById('resultsContainer').style.display = 'block';
+        }
+        
+        // Test large dataset protection
+        async function testLargeDataset() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            
+            // Try to get all tickets without pagination
+            let url = `${apiUrl}/admin/reports/tickets/`;
+            
+            showStatus('testStatus', '⚠️ Testing large dataset protection...', 'loading');
+            
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.status === 400 && data.error) {
+                    showStatus('testStatus', `✅ Large dataset protection works! ${data.error}`, 'success');
+                } else if (response.ok && data.tickets) {
+                    showStatus('testStatus', `ℹ️ Dataset is small (${data.total_tickets} tickets), protection not triggered`, 'success');
+                } else {
+                    showStatus('testStatus', `❌ Unexpected response: ${data.error || response.statusText}`, 'error');
+                }
+                
+                showRawResponse(data);
+            } catch (error) {
+                showStatus('testStatus', `❌ Request failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Load all events
+        async function loadAllEvents() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            
+            showStatus('testStatus', '📋 Loading all events...', 'loading');
+            
+            try {
+                const response = await fetch(`${apiUrl}/admin/event-list/`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showStatus('testStatus', `✅ Loaded ${data.length} events`, 'success');
+                    displayEvents(data);
+                } else {
+                    showStatus('testStatus', `❌ Failed to load events: ${data.error || response.statusText}`, 'error');
+                }
+            } catch (error) {
+                showStatus('testStatus', `❌ Request failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Pagination functions
+        function previousPage() {
+            if (currentPage > 1) {
+                testPaginatedAPI(currentPage - 1);
+            }
+        }
+        
+        function nextPage() {
+            if (currentPage < totalPages) {
+                testPaginatedAPI(currentPage + 1);
+            }
+        }
+        
+        function goToPage() {
+            const page = parseInt(document.getElementById('gotoPage').value);
+            if (page >= 1 && page <= totalPages) {
+                testPaginatedAPI(page);
+                document.getElementById('gotoPage').value = '';
+            }
+        }
+        
+        // Quick API version check
+        async function quickVersionCheck() {
+            if (!accessToken) return;
+            
+            try {
+                const apiUrl = document.getElementById('apiUrl').value;
+                const response = await fetch(`${apiUrl}/admin/reports/tickets/?page=1&page_size=1`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const data = await response.json();
+                
+                const versionIndicator = document.getElementById('versionIndicator');
+                if (data.results) {
+                    versionIndicator.innerHTML = '🟢 New API Detected';
+                    versionIndicator.style.color = '#28a745';
+                } else {
+                    versionIndicator.innerHTML = '🔴 Old API Detected';
+                    versionIndicator.style.color = '#dc3545';
+                }
+            } catch (error) {
+                const versionIndicator = document.getElementById('versionIndicator');
+                versionIndicator.innerHTML = '⚠️ API Check Failed';
+                versionIndicator.style.color = '#ffc107';
+            }
+        }
+        
+        // Display functions
+        function showStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${type}`;
+            element.classList.remove('hidden');
+        }
+        
+        function displayResults(data, isPaginated, paginationData = null) {
+            const container = document.getElementById('resultsContainer');
+            const display = document.getElementById('ticketsDisplay');
+            
+            let html = `<p><strong>Total Tickets:</strong> ${data.total_tickets}</p>`;
+            
+            if (data.tickets && data.tickets.length > 0) {
+                html += `
+                    <table class="tickets-table">
+                        <thead>
+                            <tr>
+                                <th>Ticket ID</th>
+                                <th>Event</th>
+                                <th>Sub Event</th>
+                                <th>Entry Type</th>
+                                <th>Staff</th>
+                                <th>Price</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                data.tickets.slice(0, 20).forEach(ticket => {
+                    html += `
+                        <tr>
+                            <td>${ticket.ticket_id}</td>
+                            <td>${ticket.event_name}</td>
+                            <td>${ticket.sub_event_name}</td>
+                            <td>${ticket.entry_type_name}</td>
+                            <td>${ticket.staff_username}</td>
+                            <td>$${ticket.price}</td>
+                            <td>${new Date(ticket.created_at).toLocaleString()}</td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+                
+                if (data.tickets.length > 20) {
+                    html += `<p><em>Showing first 20 of ${data.tickets.length} tickets on this page</em></p>`;
+                }
+            } else {
+                html += '<p>No tickets found</p>';
+            }
+            
+            display.innerHTML = html;
+            container.style.display = 'block';
+            
+            // Show pagination info
+            if (isPaginated && paginationData) {
+                showPaginationInfo(paginationData);
+            }
+        }
+        
+        function showPaginationInfo(data) {
+            const info = document.getElementById('paginationInfo');
+            info.innerHTML = `
+                <h4>📊 Pagination Information</h4>
+                <p><strong>Total Records:</strong> ${data.count}</p>
+                <p><strong>Current Page:</strong> ${currentPage} of ${totalPages}</p>
+                <p><strong>Page Size:</strong> ${currentPageSize}</p>
+                <p><strong>Records on this page:</strong> ${data.results.tickets.length}</p>
+                <p><strong>Has Next:</strong> ${data.next ? 'Yes' : 'No'}</p>
+                <p><strong>Has Previous:</strong> ${data.previous ? 'Yes' : 'No'}</p>
+            `;
+            info.style.display = 'block';
+        }
+        
+        function updatePaginationControls(data) {
+            const controls = document.getElementById('paginationControls');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const pageInfo = document.getElementById('pageInfo');
+            
+            prevBtn.disabled = !data.previous;
+            nextBtn.disabled = !data.next;
+            pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+            
+            controls.style.display = 'flex';
+        }
+        
+        function displayEvents(events) {
+            const container = document.getElementById('eventsContainer');
+            const list = document.getElementById('eventsList');
+            
+            let html = '<table class="tickets-table"><thead><tr><th>ID</th><th>Name</th><th>Code</th><th>Place</th><th>Dates</th><th>Action</th></tr></thead><tbody>';
+            
+            events.forEach(event => {
+                html += `
+                    <tr>
+                        <td>${event.id}</td>
+                        <td>${event.name}</td>
+                        <td>${event.code}</td>
+                        <td>${event.place}</td>
+                        <td>${event.start_date} to ${event.end_date}</td>
+                        <td><button onclick="selectEvent(${event.id})">Select</button></td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            list.innerHTML = html;
+            container.style.display = 'block';
+        }
+        
+        function selectEvent(eventId) {
+            document.getElementById('eventId').value = eventId;
+            showStatus('testStatus', `✅ Selected event ID: ${eventId}`, 'success');
+        }
+        
+        function showRawResponse(data) {
+            const container = document.getElementById('responseContainer');
+            const response = document.getElementById('rawResponse');
+            
+            response.textContent = JSON.stringify(data, null, 2);
+            container.style.display = 'block';
+        }
+        
+        // NEW: Date filtering test functions
+        async function testTodayReports() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const eventId = document.getElementById('eventId').value;
+            
+            showStatus('testStatus', '📅 Testing today\'s reports...', 'loading');
+            
+            const tests = [
+                { name: 'Today\'s Tickets', endpoint: 'tickets', param: 'today=true' },
+                { name: 'Today\'s Revenue', endpoint: 'revenue', param: 'today=true' },
+                { name: 'Today\'s Staff Summary', endpoint: 'staff-summary', param: 'today=true' }
+            ];
+            
+            let results = '<h3>📅 Today\'s Reports Results</h3>';
+            let allPassed = true;
+            
+            for (const test of tests) {
+                try {
+                    let url = `${apiUrl}/admin/reports/${test.endpoint}/?${test.param}`;
+                    if (eventId && test.endpoint !== 'staff-summary') {
+                        url += `&event_id=${eventId}`;
+                    }
+                    
+                    const response = await fetch(url, {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        const count = data.total_tickets || data.revenue_by_event?.length || data.staff_summary?.length || 0;
+                        results += `<p>✅ <strong>${test.name}:</strong> Success (${count} records)</p>`;
+                    } else {
+                        results += `<p>❌ <strong>${test.name}:</strong> ${data.error || response.statusText}</p>`;
+                        allPassed = false;
+                    }
+                } catch (error) {
+                    results += `<p>❌ <strong>${test.name}:</strong> ${error.message}</p>`;
+                    allPassed = false;
+                }
+            }
+            
+            showStatus('testStatus', allPassed ? '✅ All today\'s reports working!' : '❌ Some today\'s reports failed', allPassed ? 'success' : 'error');
+            document.getElementById('ticketsDisplay').innerHTML = results;
+            document.getElementById('resultsContainer').style.display = 'block';
+        }
+        
+        async function testSpecificDateReports() {
+            const testDate = document.getElementById('testDate').value;
+            if (!testDate) {
+                showStatus('testStatus', '❌ Please select a specific date first', 'error');
+                return;
+            }
+            
+            const apiUrl = document.getElementById('apiUrl').value;
+            const eventId = document.getElementById('eventId').value;
+            
+            showStatus('testStatus', `📆 Testing reports for ${testDate}...`, 'loading');
+            
+            const tests = [
+                { name: 'Tickets Report', endpoint: 'tickets', param: `date=${testDate}` },
+                { name: 'Revenue Report', endpoint: 'revenue', param: `date=${testDate}` },
+                { name: 'Staff Summary', endpoint: 'staff-summary', param: `date=${testDate}` }
+            ];
+            
+            let results = `<h3>📆 Reports for ${testDate}</h3>`;
+            let allPassed = true;
+            
+            for (const test of tests) {
+                try {
+                    let url = `${apiUrl}/admin/reports/${test.endpoint}/?${test.param}`;
+                    if (eventId && test.endpoint !== 'staff-summary') {
+                        url += `&event_id=${eventId}`;
+                    }
+                    
+                    const response = await fetch(url, {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        const count = data.total_tickets || data.revenue_by_event?.length || data.staff_summary?.length || 0;
+                        results += `<p>✅ <strong>${test.name}:</strong> Success (${count} records)</p>`;
+                        
+                        // Show sample data
+                        if (data.total_tickets) {
+                            results += `<p style="margin-left: 20px;">Total Revenue: $${data.revenue_by_event?.[0]?.total_revenue || 'N/A'}</p>`;
+                        }
+                    } else {
+                        results += `<p>❌ <strong>${test.name}:</strong> ${data.error || response.statusText}</p>`;
+                        allPassed = false;
+                    }
+                } catch (error) {
+                    results += `<p>❌ <strong>${test.name}:</strong> ${error.message}</p>`;
+                    allPassed = false;
+                }
+            }
+            
+            showStatus('testStatus', allPassed ? `✅ All reports for ${testDate} working!` : `❌ Some reports for ${testDate} failed`, allPassed ? 'success' : 'error');
+            document.getElementById('ticketsDisplay').innerHTML = results;
+            document.getElementById('resultsContainer').style.display = 'block';
+        }
+        
+        async function testDateRangeReports() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (!startDate || !endDate) {
+                showStatus('testStatus', '❌ Please select both start and end dates', 'error');
+                return;
+            }
+            
+            const apiUrl = document.getElementById('apiUrl').value;
+            const eventId = document.getElementById('eventId').value;
+            
+            showStatus('testStatus', `📊 Testing date range reports (${startDate} to ${endDate})...`, 'loading');
+            
+            const tests = [
+                { name: 'Tickets Report', endpoint: 'tickets', param: `start_date=${startDate}&end_date=${endDate}` },
+                { name: 'Revenue Report', endpoint: 'revenue', param: `start_date=${startDate}&end_date=${endDate}` },
+                { name: 'Staff Summary', endpoint: 'staff-summary', param: `start_date=${startDate}&end_date=${endDate}` }
+            ];
+            
+            let results = `<h3>📊 Date Range Reports (${startDate} to ${endDate})</h3>`;
+            let allPassed = true;
+            
+            for (const test of tests) {
+                try {
+                    let url = `${apiUrl}/admin/reports/${test.endpoint}/?${test.param}`;
+                    if (eventId && test.endpoint !== 'staff-summary') {
+                        url += `&event_id=${eventId}`;
+                    }
+                    
+                    const response = await fetch(url, {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        const count = data.total_tickets || data.revenue_by_event?.length || data.staff_summary?.length || 0;
+                        results += `<p>✅ <strong>${test.name}:</strong> Success (${count} records)</p>`;
+                        
+                        // Show detailed data for range
+                        if (data.total_revenue) {
+                            results += `<p style="margin-left: 20px;">Total Revenue: $${data.total_revenue}</p>`;
+                        }
+                        if (data.total_tickets) {
+                            results += `<p style="margin-left: 20px;">Total Tickets: ${data.total_tickets}</p>`;
+                        }
+                    } else {
+                        results += `<p>❌ <strong>${test.name}:</strong> ${data.error || response.statusText}</p>`;
+                        allPassed = false;
+                    }
+                } catch (error) {
+                    results += `<p>❌ <strong>${test.name}:</strong> ${error.message}</p>`;
+                    allPassed = false;
+                }
+            }
+            
+            showStatus('testStatus', allPassed ? '✅ All date range reports working!' : '❌ Some date range reports failed', allPassed ? 'success' : 'error');
+            document.getElementById('ticketsDisplay').innerHTML = results;
+            document.getElementById('resultsContainer').style.display = 'block';
+        }
+        
+        async function testAllDateFilters() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            
+            showStatus('testStatus', '🔍 Testing all date filtering combinations...', 'loading');
+            
+            const today = new Date().toISOString().split('T')[0];
+            const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+            
+            const testCases = [
+                { name: 'Today Filter', params: 'today=true' },
+                { name: 'Specific Date', params: `date=${today}` },
+                { name: 'Date Range (2 days)', params: `start_date=${yesterday}&end_date=${today}` },
+                { name: 'From Date Only', params: `start_date=${yesterday}` },
+                { name: 'Until Date Only', params: `end_date=${today}` },
+                { name: 'Invalid Date (should ignore)', params: 'date=invalid-date' },
+                { name: 'Combined with Event Filter', params: `today=true&event_id=1` }
+            ];
+            
+            let results = '<h3>🔍 Comprehensive Date Filter Tests</h3>';
+            let passedTests = 0;
+            
+            for (const testCase of testCases) {
+                try {
+                    const url = `${apiUrl}/admin/reports/tickets/?${testCase.params}`;
+                    
+                    const response = await fetch(url, {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        const count = data.total_tickets || (data.results ? data.results.total_tickets : 0);
+                        results += `<p>✅ <strong>${testCase.name}:</strong> Success (${count} tickets)</p>`;
+                        passedTests++;
+                    } else {
+                        results += `<p>❌ <strong>${testCase.name}:</strong> ${data.error || response.statusText}</p>`;
+                    }
+                } catch (error) {
+                    results += `<p>❌ <strong>${testCase.name}:</strong> ${error.message}</p>`;
+                }
+            }
+            
+            results += `<div style="margin-top: 20px; padding: 15px; background: ${passedTests === testCases.length ? '#d4edda' : '#fff3cd'}; border-radius: 4px;">`;
+            results += `<h4>📊 Test Summary: ${passedTests}/${testCases.length} tests passed</h4>`;
+            
+            if (passedTests === testCases.length) {
+                results += '<p style="color: #155724; font-weight: bold;">🎉 All date filtering features are working perfectly!</p>';
+            } else {
+                results += '<p style="color: #856404; font-weight: bold;">⚠️ Some date filtering features need attention.</p>';
+            }
+            
+            results += '</div>';
+            
+            showStatus('testStatus', `🔍 Date filter tests: ${passedTests}/${testCases.length} passed`, passedTests === testCases.length ? 'success' : 'error');
+            document.getElementById('ticketsDisplay').innerHTML = results;
+            document.getElementById('resultsContainer').style.display = 'block';
+        }
+    </script>
+    
+    <script>
+        // Auto-set today's date on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('testDate').value = today;
+            document.getElementById('startDate').value = today;
+            document.getElementById('endDate').value = today;
+        });
+    </script>
+</body>
+</html>
