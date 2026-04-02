@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Delete Tickets - Test Interface</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .container { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .form-group { margin: 15px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, button { padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; cursor: pointer; padding: 10px 20px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; opacity: 0.6; }
+        .danger { background: #dc3545; }
+        .danger:hover { background: #c82333; }
+        .warning { background: #ffc107; color: black; }
+        .success { background: #28a745; }
+        .preview { background: #e9ecef; padding: 15px; border-radius: 4px; margin: 10px 0; }
+        .error { color: red; background: #f8d7da; padding: 10px; border-radius: 4px; }
+        .note { background: #d1ecf1; padding: 10px; border-radius: 4px; color: #0c5460; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        select { width: 100%; max-width: 500px; }
+    </style>
+</head>
+<body>
+    <h1>🎫 Bulk Delete Tickets - Admin Interface</h1>
+    
+    <div class="note">
+        <strong>⚠️ Safety Features:</strong>
+        <ul>
+            <li>Cannot delete today's or future tickets</li>
+            <li>Cannot delete yesterday's tickets (safety buffer)</li>
+            <li>Requires explicit confirmation token</li>
+            <li>Preview before deletion</li>
+            <li>Staff counters preserved</li>
+        </ul>
+    </div>
+
+    <!-- Login Section -->
+    <div class="container">
+        <h2>🔐 Admin Login</h2>
+        <div class="form-group">
+            <label>Username:</label>
+            <input type="text" id="username" placeholder="admin username">
+        </div>
+        <div class="form-group">
+            <label>Password:</label>
+            <input type="password" id="password" placeholder="admin password">
+        </div>
+        <button onclick="login()">Login</button>
+        <div id="loginResult"></div>
+    </div>
+
+    <!-- Bulk Delete Section -->
+    <div class="container">
+        <h2>🗑️ Bulk Delete Tickets</h2>
+        
+        <div class="form-group">
+            <label>Load Events:</label>
+            <button onclick="loadEvents()" id="loadEventsBtn">📋 Load Events</button>
+            <div id="eventsResult"></div>
+        </div>
+        
+        <div class="form-group">
+            <label>Select Event:</label>
+            <select id="eventSelect" onchange="updateEventId()" disabled>
+                <option value="">-- Load events first --</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Event ID (Selected):</label>
+            <input type="number" id="eventId" placeholder="Select event from dropdown" readonly>
+        </div>
+        
+        <div class="form-group">
+            <label>Start Date:</label>
+            <input type="date" id="startDate">
+        </div>
+        
+        <div class="form-group">
+            <label>End Date:</label>
+            <input type="date" id="endDate">
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <button onclick="previewDeletion()" class="warning">📋 Preview Deletion</button>
+            <button onclick="confirmDeletion()" class="danger" id="deleteBtn" disabled>🗑️ DELETE TICKETS</button>
+        </div>
+        
+        <div id="previewResult"></div>
+        <div id="deleteResult"></div>
+    </div>
+
+    <!-- API Response Display -->
+    <div class="container">
+        <h2>📊 API Response</h2>
+        <pre id="apiResponse">API responses will appear here...</pre>
+    </div>
+
+    <script>
+        let authToken = '';
+        const API_BASE = 'http://localhost:8000/api';
+
+        // Set default dates (2 days ago to prevent safety restrictions)
+        window.onload = function() {
+            const today = new Date();
+            const twoDaysAgo = new Date(today);
+            twoDaysAgo.setDate(today.getDate() - 2);
+            
+            const threeDaysAgo = new Date(today);
+            threeDaysAgo.setDate(today.getDate() - 3);
+            
+            document.getElementById('startDate').value = threeDaysAgo.toISOString().split('T')[0];
+            document.getElementById('endDate').value = twoDaysAgo.toISOString().split('T')[0];
+            
+            // Disable load events button until login
+            document.getElementById('loadEventsBtn').disabled = true;
+        };
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('Please enter username and password');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/login/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                document.getElementById('apiResponse').textContent = JSON.stringify(data, null, 2);
+
+                if (response.ok && data.access) {
+                    authToken = data.access;
+                    document.getElementById('loginResult').innerHTML = 
+                        `<div class="success" style="margin-top: 10px; padding: 10px; border-radius: 4px;">
+                            ✅ Login successful! Role: ${data.user?.role || 'Unknown'}
+                        </div>`;
+                    
+                    // Enable load events button after successful login
+                    document.getElementById('loadEventsBtn').disabled = false;
+                } else {
+                    document.getElementById('loginResult').innerHTML = 
+                        `<div class="error" style="margin-top: 10px;">❌ Login failed: ${data.detail || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('loginResult').innerHTML = 
+                    `<div class="error" style="margin-top: 10px;">❌ Network error: ${error.message}</div>`;
+            }
+        }
+
+        async function loadEvents() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/event-list/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                document.getElementById('apiResponse').textContent = JSON.stringify(data, null, 2);
+
+                if (response.ok && Array.isArray(data)) {
+                    const eventSelect = document.getElementById('eventSelect');
+                    eventSelect.innerHTML = '<option value="">-- Select an event --</option>';
+                    
+                    data.forEach(event => {
+                        const option = document.createElement('option');
+                        option.value = event.id;
+                        option.textContent = `${event.name} (${event.code}) - ${event.place}`;
+                        option.dataset.eventData = JSON.stringify(event);
+                        eventSelect.appendChild(option);
+                    });
+                    
+                    eventSelect.disabled = false;
+                    
+                    document.getElementById('eventsResult').innerHTML = 
+                        `<div class="success" style="margin-top: 10px; padding: 10px; border-radius: 4px;">
+                            ✅ Loaded ${data.length} events successfully!
+                        </div>`;
+                } else {
+                    document.getElementById('eventsResult').innerHTML = 
+                        `<div class="error" style="margin-top: 10px;">❌ Failed to load events: ${data.error || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('eventsResult').innerHTML = 
+                    `<div class="error" style="margin-top: 10px;">❌ Network error: ${error.message}</div>`;
+            }
+        }
+
+        function updateEventId() {
+            const eventSelect = document.getElementById('eventSelect');
+            const selectedOption = eventSelect.options[eventSelect.selectedIndex];
+            
+            if (selectedOption.value) {
+                document.getElementById('eventId').value = selectedOption.value;
+                
+                // Show event details
+                const eventData = JSON.parse(selectedOption.dataset.eventData || '{}');
+                document.getElementById('eventsResult').innerHTML = 
+                    `<div class="preview" style="margin-top: 10px;">
+                        <h4>🎆 Selected Event Details</h4>
+                        <p><strong>Name:</strong> ${eventData.name}</p>
+                        <p><strong>Code:</strong> ${eventData.code}</p>
+                        <p><strong>Place:</strong> ${eventData.place}</p>
+                        <p><strong>Date:</strong> ${eventData.start_date} to ${eventData.end_date}</p>
+                        <p><strong>ID:</strong> ${eventData.id}</p>
+                    </div>`;
+            } else {
+                document.getElementById('eventId').value = '';
+                document.getElementById('eventsResult').innerHTML = '';
+            }
+        }
+
+        async function previewDeletion() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+
+            const eventId = document.getElementById('eventId').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            if (!eventId || !startDate || !endDate) {
+                alert('Please fill all fields');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/tickets/bulk-delete/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        event_id: parseInt(eventId),
+                        start_date: startDate,
+                        end_date: endDate
+                    })
+                });
+
+                const data = await response.json();
+                document.getElementById('apiResponse').textContent = JSON.stringify(data, null, 2);
+
+                if (response.ok) {
+                    const preview = data.preview;
+                    document.getElementById('previewResult').innerHTML = `
+                        <div class="preview">
+                            <h3>📋 Deletion Preview</h3>
+                            <p><strong>Event:</strong> ${preview.event_name} (${preview.event_code})</p>
+                            <p><strong>Date Range:</strong> ${preview.date_range}</p>
+                            <p><strong>Tickets to Delete:</strong> ${preview.total_tickets}</p>
+                            <p><strong>Revenue Impact:</strong> $${preview.total_revenue}</p>
+                            <p><strong>Affected Staff:</strong> ${preview.affected_staff.join(', ')}</p>
+                            <div class="warning" style="margin: 10px 0; padding: 10px; border-radius: 4px;">
+                                ⚠️ This action cannot be undone. Reports will automatically update.
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Enable delete button
+                    document.getElementById('deleteBtn').disabled = false;
+                } else {
+                    document.getElementById('previewResult').innerHTML = 
+                        `<div class="error">❌ Preview failed: ${data.error || JSON.stringify(data)}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('previewResult').innerHTML = 
+                    `<div class="error">❌ Network error: ${error.message}</div>`;
+            }
+        }
+
+        async function confirmDeletion() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+
+            const confirmed = confirm(
+                '⚠️ FINAL CONFIRMATION ⚠️\n\n' +
+                'This will PERMANENTLY DELETE the selected tickets.\n' +
+                'This action CANNOT be undone.\n\n' +
+                'Are you absolutely sure you want to proceed?'
+            );
+
+            if (!confirmed) return;
+
+            const eventId = document.getElementById('eventId').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/tickets/bulk-delete/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        event_id: parseInt(eventId),
+                        start_date: startDate,
+                        end_date: endDate,
+                        confirmation_token: 'DELETE_TICKETS_CONFIRMED'
+                    })
+                });
+
+                const data = await response.json();
+                document.getElementById('apiResponse').textContent = JSON.stringify(data, null, 2);
+
+                if (response.ok) {
+                    const summary = data.summary;
+                    document.getElementById('deleteResult').innerHTML = `
+                        <div class="success" style="padding: 15px; border-radius: 4px; margin: 10px 0;">
+                            <h3>✅ Deletion Completed</h3>
+                            <p><strong>Event:</strong> ${summary.event_name} (${summary.event_code})</p>
+                            <p><strong>Date Range:</strong> ${summary.date_range}</p>
+                            <p><strong>Tickets Deleted:</strong> ${data.summary.tickets_deleted}</p>
+                            <p><strong>Revenue Impact:</strong> $${summary.total_revenue_impact}</p>
+                            <p><strong>Policy:</strong> ${summary.counter_policy}</p>
+                            <div class="note" style="margin-top: 10px;">
+                                📊 All reports will automatically reflect these changes.
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Reset form
+                    document.getElementById('deleteBtn').disabled = true;
+                    document.getElementById('previewResult').innerHTML = '';
+                } else {
+                    document.getElementById('deleteResult').innerHTML = 
+                        `<div class="error">❌ Deletion failed: ${data.error || JSON.stringify(data)}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('deleteResult').innerHTML = 
+                    `<div class="error">❌ Network error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>

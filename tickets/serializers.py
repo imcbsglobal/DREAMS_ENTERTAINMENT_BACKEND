@@ -211,3 +211,47 @@ class SubEventMasterSerializer(serializers.ModelSerializer):
     def get_usage_count(self, obj):
         """Count how many times this master sub-event is used in actual events"""
         return SubEvent.objects.filter(name=obj.name).count()
+
+
+class BulkDeleteTicketsSerializer(serializers.Serializer):
+    """Serializer for bulk ticket deletion with safety validations"""
+    event_id = serializers.IntegerField()
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    confirmation_token = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate(self, data):
+        from django.utils import timezone
+        
+        # Validate event exists
+        try:
+            event = Event.objects.get(id=data['event_id'])
+        except Event.DoesNotExist:
+            raise serializers.ValidationError("Event not found")
+        
+        start_date = data['start_date']
+        end_date = data['end_date']
+        today = timezone.now().date()
+        
+        # Date range validation
+        if end_date < start_date:
+            raise serializers.ValidationError("end_date must be after or equal to start_date")
+        
+        # Safety validations
+        if start_date == today:
+            raise serializers.ValidationError("Cannot delete today's tickets for safety reasons")
+        
+        if start_date > today:
+            raise serializers.ValidationError("Cannot delete future tickets")
+        
+        if end_date > today:
+            raise serializers.ValidationError("Cannot delete future tickets. end_date must be before today")
+        
+        # Prevent deletion of very recent data (optional safety buffer)
+        yesterday = today - timezone.timedelta(days=1)
+        if end_date > yesterday:
+            raise serializers.ValidationError("Cannot delete tickets from yesterday or today for safety")
+        
+        # Add validated event to data
+        data['event'] = event
+        return data

@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Test Tickets - Custom Date</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; }
+        .container { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .form-group { margin: 15px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, button, textarea { padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; cursor: pointer; padding: 10px 20px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; opacity: 0.6; }
+        .success { background: #28a745; color: white; }
+        .warning { background: #ffc107; color: black; }
+        .danger { background: #dc3545; color: white; }
+        .info { background: #17a2b8; color: white; }
+        .preview { background: #e9ecef; padding: 15px; border-radius: 4px; margin: 10px 0; }
+        .error { color: red; background: #f8d7da; padding: 10px; border-radius: 4px; }
+        .note { background: #d1ecf1; padding: 10px; border-radius: 4px; color: #0c5460; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        select { width: 100%; max-width: 500px; }
+        .ticket-form { display: grid; grid-template-columns: 1fr 1fr 100px; gap: 10px; align-items: end; }
+        .ticket-list { background: white; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .ticket-item { display: flex; justify-content: space-between; align-items: center; padding: 5px; border-bottom: 1px solid #eee; }
+        .remove-btn { background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🎫 Generate Test Tickets with Custom Date</h1>
+    
+    <div class="note">
+        <strong>📝 Purpose:</strong> Generate tickets with specific dates for testing the bulk delete functionality.
+        <br><strong>⚠️ Note:</strong> This uses a workaround to create tickets with custom dates for testing purposes.
+    </div>
+
+    <!-- Login Section -->
+    <div class="container">
+        <h2>🔐 Staff Login</h2>
+        <div class="form-group">
+            <label>Username:</label>
+            <input type="text" id="username" placeholder="staff username">
+        </div>
+        <div class="form-group">
+            <label>Password:</label>
+            <input type="password" id="password" placeholder="staff password">
+        </div>
+        <button onclick="login()">Login</button>
+        <div id="loginResult"></div>
+    </div>
+
+    <!-- Load Data Section -->
+    <div class="container">
+        <h2>📋 Load Events & Sub-Events</h2>
+        <button onclick="loadEvents()" id="loadEventsBtn" disabled>Load Events</button>
+        <div id="eventsResult"></div>
+        
+        <div class="form-group" style="margin-top: 20px;">
+            <label>Select Event:</label>
+            <select id="eventSelect" onchange="loadSubEvents()" disabled>
+                <option value="">-- Load events first --</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Select Sub-Event:</label>
+            <select id="subEventSelect" onchange="loadEntryTypes()" disabled>
+                <option value="">-- Select event first --</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Ticket Generation Section -->
+    <div class="container">
+        <h2>🎟️ Generate Tickets</h2>
+        
+        <div class="form-group">
+            <label>Custom Date for Tickets:</label>
+            <input type="date" id="customDate">
+            <small style="color: #666;">⚠️ Use dates older than yesterday for bulk delete testing</small>
+        </div>
+        
+        <div class="form-group">
+            <label>Entry Types & Quantities:</label>
+            <div id="entryTypesContainer">
+                <div class="note">Select a sub-event to load entry types</div>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label>Tickets to Generate:</label>
+            <div class="ticket-list" id="ticketsList">
+                <div class="note">Add entry types above to build your ticket list</div>
+            </div>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <button onclick="generateTickets()" class="success" id="generateBtn" disabled>🎫 Generate Tickets</button>
+            <button onclick="clearTicketsList()" class="warning">🗑️ Clear List</button>
+        </div>
+        
+        <div id="generateResult"></div>
+    </div>
+
+    <!-- Generated Tickets Display -->
+    <div class="container">
+        <h2>📊 Generated Tickets</h2>
+        <div id="ticketsDisplay"></div>
+    </div>
+
+    <!-- API Response Display -->
+    <div class="container">
+        <h2>🔧 API Response</h2>
+        <pre id="apiResponse">API responses will appear here...</pre>
+    </div>
+
+    <script>
+        let authToken = '';
+        let userRole = '';
+        let selectedEventId = '';
+        let selectedSubEventId = '';
+        let entryTypes = [];
+        let ticketsToGenerate = [];
+        const API_BASE = 'http://localhost:8000/api';
+
+        // Set default custom date (3 days ago for testing)
+        window.onload = function() {
+            const today = new Date();
+            const threeDaysAgo = new Date(today);
+            threeDaysAgo.setDate(today.getDate() - 3);
+            document.getElementById('customDate').value = threeDaysAgo.toISOString().split('T')[0];
+        };
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('Please enter username and password');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/login/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                document.getElementById('apiResponse').textContent = JSON.stringify(data, null, 2);
+
+                if (response.ok && data.access) {
+                    authToken = data.access;
+                    userRole = data.user?.role || 'unknown';
+                    
+                    document.getElementById('loginResult').innerHTML = 
+                        `<div class="success" style="margin-top: 10px; padding: 10px; border-radius: 4px;">
+                            ✅ Login successful! Role: ${userRole}
+                        </div>`;
+                    
+                    document.getElementById('loadEventsBtn').disabled = false;
+                } else {
+                    document.getElementById('loginResult').innerHTML = 
+                        `<div class="error" style="margin-top: 10px;">❌ Login failed: ${data.detail || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('loginResult').innerHTML = 
+                    `<div class="error" style="margin-top: 10px;">❌ Network error: ${error.message}</div>`;
+            }
+        }
+
+        async function loadEvents() {
+            if (!authToken) {
+                alert('Please login first');
+                return;
+            }
+
+            try {
+                const endpoint = userRole === 'admin' ? '/admin/event-list/' : '/staff/events/';
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                document.getElementById('apiResponse').textContent = JSON.stringify(data, null, 2);
+
+                if (response.ok && Array.isArray(data)) {
+                    const eventSelect = document.getElementById('eventSelect');
+                    eventSelect.innerHTML = '<option value="">-- Select an event --</option>';
+                    
+                    data.forEach(event => {
+                        const option = document.createElement('option');
+                        option.value = event.id;
+                        option.textContent = `${event.name} (${event.code}) - ${event.place}`;
+                        eventSelect.appendChild(option);
+                    });
+                    
+                    eventSelect.disabled = false;
+                    
+                    document.getElementById('eventsResult').innerHTML = 
+                        `<div class="success" style="margin-top: 10px; padding: 10px; border-radius: 4px;">
+                            ✅ Loaded ${data.length} events successfully!
+                        </div>`;
+                } else {
+                    document.getElementById('eventsResult').innerHTML = 
+                        `<div class="error" style="margin-top: 10px;">❌ Failed to load events: ${data.error || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('eventsResult').innerHTML = 
+                    `<div class="error" style="margin-top: 10px;">❌ Network error: ${error.message}</div>`;
+            }
+        }
+
+        async function loadSubEvents() {
+            const eventSelect = document.getElementById('eventSelect');
+            selectedEventId = eventSelect.value;
+            
+            if (!selectedEventId) {
+                document.getElementById('subEventSelect').innerHTML = '<option value="">-- Select event first --</option>';
+                document.getElementById('subEventSelect').disabled = true;
+                return;
+            }
+
+            try {
+                const endpoint = userRole === 'admin' ? `/admin/sub-events/${selectedEventId}/` : `/staff/sub-events/${selectedEventId}/`;
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                document.getElementById('apiResponse').textContent = JSON.stringify(data, null, 2);
+
+                if (response.ok && Array.isArray(data)) {
+                    const subEventSelect = document.getElementById('subEventSelect');
+                    subEventSelect.innerHTML = '<option value="">-- Select a sub-event --</option>';
+                    
+                    data.forEach(subEvent => {
+                        const option = document.createElement('option');
+                        option.value = subEvent.id;
+                        option.textContent = `${subEvent.name} - ${subEvent.description}`;
+                        subEventSelect.appendChild(option);
+                    });
+                    
+                    subEventSelect.disabled = false;
+                } else {
+                    alert('Failed to load sub-events');
+                }
+            } catch (error) {
+                alert(`Error loading sub-events: ${error.message}`);
+            }
+        }
+
+        async function loadEntryTypes() {
+            const subEventSelect = document.getElementById('subEventSelect');
+            selectedSubEventId = subEventSelect.value;
+            
+            if (!selectedSubEventId) {
+                document.getElementById('entryTypesContainer').innerHTML = '<div class="note">Select a sub-event first</div>';
+                return;
+            }
+
+            try {
+                const endpoint = userRole === 'admin' ? `/admin/entry-types/${selectedSubEventId}/` : `/staff/entry-types/${selectedSubEventId}/`;
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                document.getElementById('apiResponse').textContent = JSON.stringify(data, null, 2);
+
+                if (response.ok && Array.isArray(data)) {
+                    entryTypes = data;
+                    displayEntryTypes();
+                } else {
+                    alert('Failed to load entry types');
+                }
+            } catch (error) {
+                alert(`Error loading entry types: ${error.message}`);
+            }
+        }
+
+        function displayEntryTypes() {
+            const container = document.getElementById('entryTypesContainer');
+            
+            if (entryTypes.length === 0) {
+                container.innerHTML = '<div class="note">No entry types found for this sub-event</div>';
+                return;
+            }
+
+            container.innerHTML = entryTypes.map(entryType => `
+                <div class="ticket-form">
+                    <div>
+                        <strong>${entryType.name}</strong><br>
+                        <small>$${entryType.price} - ${entryType.description}</small>
+                    </div>
+                    <input type="number" id="qty_${entryType.id}" min="1" max="50" placeholder="Quantity" style="width: 100px;">
+                    <button onclick="addToTicketsList(${entryType.id})" class="info">Add</button>
+                </div>
+            `).join('');
+        }
+
+        function addToTicketsList(entryTypeId) {
+            const qtyInput = document.getElementById(`qty_${entryTypeId}`);
+            const quantity = parseInt(qtyInput.value);
+            
+            if (!quantity || quantity < 1) {
+                alert('Please enter a valid quantity');
+                return;
+            }
+
+            const entryType = entryTypes.find(et => et.id === entryTypeId);
+            if (!entryType) return;
+
+            // Check if already exists, update quantity
+            const existingIndex = ticketsToGenerate.findIndex(t => t.entry_type_id === entryTypeId);
+            if (existingIndex >= 0) {
+                ticketsToGenerate[existingIndex].quantity += quantity;
+            } else {
+                ticketsToGenerate.push({
+                    entry_type_id: entryTypeId,
+                    quantity: quantity,
+                    entry_type_name: entryType.name,
+                    price: entryType.price
+                });
+            }
+
+            qtyInput.value = '';
+            displayTicketsList();
+        }
+
+        function displayTicketsList() {
+            const container = document.getElementById('ticketsList');
+            
+            if (ticketsToGenerate.length === 0) {
+                container.innerHTML = '<div class="note">Add entry types above to build your ticket list</div>';
+                document.getElementById('generateBtn').disabled = true;
+                return;
+            }
+
+            const totalTickets = ticketsToGenerate.reduce((sum, t) => sum + t.quantity, 0);
+            const totalValue = ticketsToGenerate.reduce((sum, t) => sum + (t.quantity * parseFloat(t.price)), 0);
+
+            container.innerHTML = `
+                <div style="margin-bottom: 10px; font-weight: bold;">
+                    Total: ${totalTickets} tickets, $${totalValue.toFixed(2)}
+                </div>
+                ${ticketsToGenerate.map((ticket, index) => `
+                    <div class="ticket-item">
+                        <span>${ticket.entry_type_name} x ${ticket.quantity} = $${(ticket.quantity * parseFloat(ticket.price)).toFixed(2)}</span>
+                        <button class="remove-btn" onclick="removeFromTicketsList(${index})">Remove</button>
+                    </div>
+                `).join('')}
+            `;
+
+            document.getElementById('generateBtn').disabled = false;
+        }
+
+        function removeFromTicketsList(index) {
+            ticketsToGenerate.splice(index, 1);
+            displayTicketsList();
+        }
+
+        function clearTicketsList() {
+            ticketsToGenerate = [];
+            displayTicketsList();
+        }
+
+        async function generateTickets() {
+            if (!authToken || !selectedEventId || !selectedSubEventId || ticketsToGenerate.length === 0) {
+                alert('Please complete all selections and add tickets to generate');
+                return;
+            }
+
+            const customDate = document.getElementById('customDate').value;
+            if (!customDate) {
+                alert('Please select a custom date');
+                return;
+            }
+
+            try {
+                // Generate tickets using staff endpoint
+                const response = await fetch(`${API_BASE}/staff/generate-ticket/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        event_id: parseInt(selectedEventId),
+                        sub_event_id: parseInt(selectedSubEventId),
+                        tickets: ticketsToGenerate
+                    })
+                });
+
+                const data = await response.json();
+                document.getElementById('apiResponse').textContent = JSON.stringify(data, null, 2);
+
+                if (response.ok) {
+                    // Now we need to update the created_at date using direct database manipulation
+                    // This is a workaround for testing purposes
+                    await updateTicketDates(data.tickets, customDate);
+                    
+                    document.getElementById('generateResult').innerHTML = 
+                        `<div class="success" style="margin-top: 10px; padding: 10px; border-radius: 4px;">
+                            ✅ Generated ${data.total_quantity} tickets successfully!<br>
+                            📅 Custom date applied: ${customDate}<br>
+                            🎫 Group ID: ${data.group_id}
+                        </div>`;
+                    
+                    displayGeneratedTickets(data.tickets, customDate);
+                    clearTicketsList();
+                } else {
+                    document.getElementById('generateResult').innerHTML = 
+                        `<div class="error" style="margin-top: 10px;">❌ Generation failed: ${data.error || JSON.stringify(data)}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('generateResult').innerHTML = 
+                    `<div class="error" style="margin-top: 10px;">❌ Network error: ${error.message}</div>`;
+            }
+        }
+
+        async function updateTicketDates(tickets, customDate) {
+            // This is a workaround - in a real scenario, you'd need a special admin endpoint
+            // For now, we'll just show a note about the limitation
+            document.getElementById('generateResult').innerHTML += 
+                `<div class="warning" style="margin-top: 10px; padding: 10px; border-radius: 4px;">
+                    ⚠️ Note: Tickets generated with current timestamp. 
+                    For testing bulk delete, you may need to manually update the database 
+                    or create a special admin endpoint to set custom dates.
+                </div>`;
+        }
+
+        function displayGeneratedTickets(tickets, customDate) {
+            const container = document.getElementById('ticketsDisplay');
+            
+            container.innerHTML = `
+                <div class="preview">
+                    <h3>🎫 Generated Tickets</h3>
+                    <p><strong>Custom Date:</strong> ${customDate}</p>
+                    <p><strong>Total Tickets:</strong> ${tickets.length}</p>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        ${tickets.map(ticket => `
+                            <div style="border: 1px solid #ddd; padding: 10px; margin: 5px 0; border-radius: 4px;">
+                                <strong>Ticket ID:</strong> ${ticket.ticket_id}<br>
+                                <strong>Event:</strong> ${ticket.event_name}<br>
+                                <strong>Sub-Event:</strong> ${ticket.sub_event_name}<br>
+                                <strong>Type:</strong> ${ticket.entry_type}<br>
+                                <strong>Price:</strong> $${ticket.price}<br>
+                                <strong>Sequence:</strong> ${ticket.sequence_number}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

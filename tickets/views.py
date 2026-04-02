@@ -12,7 +12,8 @@ from .models import Event, SubEvent, EntryType, StaffProfile, TicketCustomizatio
 from .serializers import (
     EventSerializer, SubEventSerializer, EntryTypeSerializer, StaffProfileSerializer,
     CreateStaffSerializer, TicketCustomizationSerializer, TicketSerializer,
-    GenerateTicketSerializer, TicketPrintSerializer, SubEventMasterSerializer
+    GenerateTicketSerializer, TicketPrintSerializer, SubEventMasterSerializer,
+    BulkDeleteTicketsSerializer
 )
 from .permissions import IsAdmin, IsStaff, IsAdminOrStaff
 from .services import TicketService
@@ -1115,6 +1116,173 @@ class DeleteEventView(APIView):
                 'tickets': ticket_count
             }
         })
+
+
+class BulkDeleteTicketsView(APIView):
+    """Admin: Safe bulk deletion of tickets by date range and event"""
+    permission_classes = [IsAdmin]
+    
+    def post(self, request):
+        """Preview tickets to be deleted (dry run)"""
+        serializer = BulkDeleteTicketsSerializer(data=request.data)
+        if serializer.is_valid():
+            event = serializer.validated_data['event']
+            start_date = serializer.validated_data['start_date']
+            end_date = serializer.validated_data['end_date']
+            
+            # Find tickets to be deleted
+            tickets_to_delete = self._get_tickets_to_delete(event, start_date, end_date)
+            
+            if not tickets_to_delete.exists():
+                return Response({
+                    'message': 'No tickets found for the specified criteria',
+                    'event_name': event.name,
+                    'date_range': f'{start_date} to {end_date}',
+                    'tickets_count': 0
+                })
+            
+            # Generate preview data
+            preview_data = self._generate_preview_data(tickets_to_delete, event, start_date, end_date)
+            
+            return Response({
+                'message': 'Preview of tickets to be deleted',
+                'preview': preview_data,
+                'note': 'Use DELETE method with confirmation_token to proceed with deletion'
+            })
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @transaction.atomic
+    def delete(self, request):
+        """Actually delete tickets (requires confirmation)"""
+        serializer = BulkDeleteTicketsSerializer(data=request.data)
+        if serializer.is_valid():
+            event = serializer.validated_data['event']
+            start_date = serializer.validated_data['start_date']
+            end_date = serializer.validated_data['end_date']
+            confirmation_token = serializer.validated_data.get('confirmation_token')
+            
+            # Validate confirmation token
+            if confirmation_token != 'DELETE_TICKETS_CONFIRMED':
+                return Response({
+                    'error': 'Invalid confirmation token',
+                    'required_token': 'DELETE_TICKETS_CONFIRMED',
+                    'note': 'This is a safety measure to prevent accidental deletions'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Find tickets to delete
+            tickets_to_delete = self._get_tickets_to_delete(event, start_date, end_date)
+            
+            if not tickets_to_delete.exists():
+                return Response({
+                    'message': 'No tickets found for deletion',
+                    'event_name': event.name,
+                    'date_range': f'{start_date} to {end_date}'
+                })
+            
+            # Generate summary before deletion
+            deletion_summary = self._generate_deletion_summary(tickets_to_delete, event, start_date, end_date)
+            
+            # Perform deletion
+            deleted_count = tickets_to_delete.count()
+            tickets_to_delete.delete()
+            
+            # Add deletion timestamp
+            deletion_summary['deletion_timestamp'] = timezone.now()
+            deletion_summary['tickets_deleted'] = deleted_count
+            
+            return Response({
+                'message': f'{deleted_count} tickets deleted successfully',
+                'summary': deletion_summary,
+                'note': 'Reports will automatically reflect the changes. Staff counters preserved for sequence integrity.'
+            })
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def _get_tickets_to_delete(self, event, start_date, end_date):
+        """Get tickets that match deletion criteria with safety filters"""
+        today = timezone.now().date()
+        
+        return Ticket.objects.filter(
+            event=event,
+            created_at__date__range=[start_date, end_date]
+        ).exclude(
+            created_at__date=today  # Safety: Never delete today's tickets
+        ).exclude(
+            created_at__date__gt=today  # Safety: Never delete future tickets
+        )
+    
+    def _generate_preview_data(self, tickets_queryset, event, start_date, end_date):
+        """Generate preview data for tickets to be deleted"""
+        # Basic counts
+        total_tickets = tickets_queryset.count()
+        total_revenue = tickets_queryset.aggregate(total=Sum('price'))['total'] or 0
+        
+        # Affected staff
+        affected_staff = tickets_queryset.values_list('staff__username', flat=True).distinct()
+        
+        # Breakdown by sub-event
+        sub_event_breakdown = tickets_queryset.values(
+            'sub_event__name'
+        ).annotate(
+            ticket_count=Count('id'),
+            revenue=Sum('price')
+        ).order_by('sub_event__name')
+        
+        # Breakdown by entry type
+        entry_type_breakdown = tickets_queryset.values(
+            'entry_type__name'
+        ).annotate(
+            ticket_count=Count('id'),
+            revenue=Sum('price')
+        ).order_by('entry_type__name')
+        
+        return {
+            'event_name': event.name,
+            'event_code': event.code,
+            'date_range': f'{start_date} to {end_date}',
+            'total_tickets': total_tickets,
+            'total_revenue': str(total_revenue),
+            'affected_staff': list(affected_staff),
+            'sub_event_breakdown': list(sub_event_breakdown),
+            'entry_type_breakdown': list(entry_type_breakdown),
+            'safety_notes': [
+                'Today\'s tickets are excluded for safety',
+                'Future tickets are excluded for safety',
+                'Staff counters will be preserved',
+                'Reports will automatically update'
+            ]
+        }
+    
+    def _generate_deletion_summary(self, tickets_queryset, event, start_date, end_date):
+        """Generate summary data for completed deletion"""
+        # Basic counts
+        total_tickets = tickets_queryset.count()
+        total_revenue = tickets_queryset.aggregate(total=Sum('price'))['total'] or 0
+        
+        # Affected staff with their ticket counts
+        affected_staff_data = []
+        staff_ids = tickets_queryset.values_list('staff_id', flat=True).distinct()
+        
+        for staff_id in staff_ids:
+            staff_tickets = tickets_queryset.filter(staff_id=staff_id)
+            staff_user = User.objects.get(id=staff_id)
+            
+            affected_staff_data.append({
+                'username': staff_user.username,
+                'staff_code': staff_user.staff_profile.get_staff_code(),
+                'tickets_deleted': staff_tickets.count(),
+                'revenue_impact': str(staff_tickets.aggregate(total=Sum('price'))['total'] or 0)
+            })
+        
+        return {
+            'event_name': event.name,
+            'event_code': event.code,
+            'date_range': f'{start_date} to {end_date}',
+            'total_revenue_impact': str(total_revenue),
+            'affected_staff': affected_staff_data,
+            'counter_policy': 'Staff counters preserved for sequence integrity'
+        }
 
 
 # ==================== MASTER DATA VIEWS ====================
